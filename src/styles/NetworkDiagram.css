@@ -2,13 +2,26 @@
 
 /* Connection label styles */
 .connection-label {
-    padding: 4px;
-    font-size: 12px;
-    background-color: white;
-    border: 1px solid #61B7CF;
-    border-radius: 4px;
-    color: #216477;
-    z-index: 10;
+    font-size: 10px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    background-color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(0, 123, 255, 0.3);
+    color: #007bff;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.source-label {
+    transform: translateX(-100%);
+    text-align: right;
+    margin-right: 10px;
+}
+
+.destination-label {
+    transform: translateX(0%);
+    text-align: left;
+    margin-left: 10px;
 }
 
 /* Endpoint label styles */
@@ -20,19 +33,33 @@
     color: #216477;
 }
 
-/* Show endpoint labels on hover */
-._jsPlumb_endpoint:hover .endpoint-label {
-    display: block;
+/* Endpoint styles */
+.endpoint {
+    fill: #007bff;
+    stroke: #007bff;
+    cursor: pointer;
+    transition: all 0.2s ease;
 }
 
-/* Connection hover styles */
-._jsPlumb_connector:hover {
+.endpoint-blank {
+    width: 10px;
+    height: 10px;
+    background-color: transparent;
+    border: none;
     cursor: pointer;
 }
 
-/* Endpoint hover styles */
-._jsPlumb_endpoint:hover {
-    cursor: crosshair;
+.endpoint-blank:hover {
+    background-color: rgba(0, 123, 255, 0.3);
+    border-radius: 50%;
+}
+
+.endpoint-hover {
+    fill: #0056b3;
+    stroke: #0056b3;
+    transform: scale(1.5);
+    background-color: rgba(0, 123, 255, 0.5) !important;
+    border-radius: 50%;
 }
 
 /* Main diagram container */
@@ -41,44 +68,30 @@
     height: 100%;
     position: relative;
     background-color: #fff;
-    border-radius: 4px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
 }
 
 /* Network diagram node styles */
 .diagram-node {
-    width: var(--node-width, 80px);
-    height: var(--node-height, 80px);
     position: absolute;
-    background-color: #f5f5f5;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: move;
     user-select: none;
-    z-index: 1;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-    transition: box-shadow 0.3s ease;
+}
+
+.diagram-node img {
+    display: block;
+    pointer-events: none;
 }
 
 .diagram-node.selected {
-    border: 2px solid #ff0000;
-    box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
-    z-index: 21;
+    outline: none;
+    border: none;
+    box-shadow: none;
 }
 
 .diagram-node:hover {
-    box-shadow: 0 3px 6px rgba(0,0,0,0.16);
-}
-
-.active {
-    border: 1px dotted green;
-}
-
-.hover {
-    border: 1px dotted red;
+    outline: none;
+    background: none;
+    border: none;
+    box-shadow: none;
 }
 
 /* jsPlumb specific styles */
@@ -170,95 +183,18 @@
     visibility: visible !important;
 }
 
-/* Show endpoint labels on hover */
-._jsPlumb_endpoint:hover .endpoint-label,
-.jtk-endpoint:hover .endpoint-label {
-    display: block;
-}
-
-/* Connection hover styles */
-._jsPlumb_connector:hover,
-.jtk-connector:hover {
-    cursor: pointer;
-}
-
-/* Endpoint hover styles */
-._jsPlumb_endpoint:hover,
-.jtk-endpoint:hover {
-    cursor: crosshair;
-}
-
 /* Window styles */
 .window {
     background-color: white;
-    border: 1px solid #346789;
     text-align: center;
     z-index: 24;
     cursor: pointer;
-    box-shadow: 2px 2px 19px #aaa;
-    -o-box-shadow: 2px 2px 19px #aaa;
-    -webkit-box-shadow: 2px 2px 19px #aaa;
-    -moz-box-shadow: 2px 2px 19px #aaa;
-    -moz-border-radius: 0.5em;
-    border-radius: 0.5em;
     position: absolute;
     color: black;
     padding: 0.5em;
     width: 80px;
     height: 80px;
     line-height: 80px;
-    -webkit-transition: -webkit-box-shadow 0.15s ease-in;
-    -moz-transition: -moz-box-shadow 0.15s ease-in;
-    -o-transition: -o-box-shadow 0.15s ease-in;
-    transition: box-shadow 0.15s ease-in;
-}
-
-.window:hover {
-    border: 1px solid #123456;
-    box-shadow: 2px 2px 19px #444;
-    -o-box-shadow: 2px 2px 19px #444;
-    -webkit-box-shadow: 2px 2px 19px #444;
-    -moz-box-shadow: 2px 2px 19px #444;
-    opacity: 0.9;
-}
-
-.jtk-connector {
-    z-index: 4;
-}
-
-.jtk-endpoint {
-    z-index: 5;
-}
-
-.jtk-overlay {
-    z-index: 6;
-}
-
-.endpointTargetLabel,
-.endpointSourceLabel {
-    font-size: 0.8em;
-    z-index: 21;
-    padding: 0.2em;
-    border: 1px solid #346789;
-    border-radius: 0.5em;
-    background-color: white;
-    color: #346789;
-    opacity: 0.8;
-    cursor: pointer;
-}
-
-path, .jtk-endpoint {
-    cursor: pointer;
-}
-
-/* Active connection styles */
-.jtk-connector-outline {
-    stroke-width: 2;
-}
-
-/* Selected connection styles */
-.jtk-connector.jtk-hover {
-    stroke-width: 3;
 }
 
 /* Required styles for endpoints and connections */
@@ -268,9 +204,6 @@ path, .jtk-endpoint {
     font: 12px sans-serif;
     color: #444;
     z-index: 21;
-    border: 1px solid #999;
-    border-radius: 2px;
-    opacity: 0.8;
     cursor: pointer;
 }
 
