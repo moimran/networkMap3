@@ -1,0 +1,310 @@
+/* Network Diagram Styles */
+
+/* Connection label styles */
+.connection-label {
+    padding: 4px;
+    font-size: 12px;
+    background-color: white;
+    border: 1px solid #61B7CF;
+    border-radius: 4px;
+    color: #216477;
+    z-index: 10;
+}
+
+/* Endpoint label styles */
+.endpoint-label {
+    font-size: 10px;
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 2px 4px;
+    border-radius: 2px;
+    color: #216477;
+}
+
+/* Show endpoint labels on hover */
+._jsPlumb_endpoint:hover .endpoint-label {
+    display: block;
+}
+
+/* Connection hover styles */
+._jsPlumb_connector:hover {
+    cursor: pointer;
+}
+
+/* Endpoint hover styles */
+._jsPlumb_endpoint:hover {
+    cursor: crosshair;
+}
+
+/* Main diagram container */
+.diagram-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    background-color: #fff;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+
+/* Network diagram node styles */
+.diagram-node {
+    width: var(--node-width, 80px);
+    height: var(--node-height, 80px);
+    position: absolute;
+    background-color: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: move;
+    user-select: none;
+    z-index: 1;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    transition: box-shadow 0.3s ease;
+}
+
+.diagram-node.selected {
+    border: 2px solid #ff0000;
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
+    z-index: 21;
+}
+
+.diagram-node:hover {
+    box-shadow: 0 3px 6px rgba(0,0,0,0.16);
+}
+
+.active {
+    border: 1px dotted green;
+}
+
+.hover {
+    border: 1px dotted red;
+}
+
+/* jsPlumb specific styles */
+._jsPlumb_endpoint {
+    z-index: 23;
+}
+
+.jtk-endpoint {
+    z-index: 2;
+    cursor: pointer;
+}
+
+.jtk-connector {
+    z-index: 0;
+    cursor: pointer;
+}
+
+.jtk-overlay {
+    z-index: 24;
+}
+
+/* Ensure endpoints are visible */
+._jsPlumb_endpoint,
+.jtk-endpoint {
+    z-index: 23 !important;
+    position: absolute !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+}
+
+/* Ensure endpoint SVGs are visible */
+._jsPlumb_endpoint svg,
+.jtk-endpoint svg {
+    z-index: 23 !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+}
+
+/* Ensure connectors are visible */
+._jsPlumb_connector,
+.jtk-connector {
+    z-index: 22 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+}
+
+/* Container for endpoints */
+.jtk-endpoint-anchor {
+    position: absolute;
+    z-index: 12;
+    transform-origin: center center;
+}
+
+/* Ensure endpoints are visible and stay attached */
+._jsPlumb_endpoint,
+.jtk-endpoint {
+    z-index: 12 !important;
+    position: absolute !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    transform-origin: center center;
+}
+
+/* Ensure endpoint SVGs are visible */
+._jsPlumb_endpoint svg,
+.jtk-endpoint svg {
+    z-index: 12 !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    transform-origin: center center;
+}
+
+/* Ensure connectors are visible */
+._jsPlumb_connector,
+.jtk-connector {
+    z-index: 9 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+}
+
+/* Ensure overlays are visible */
+._jsPlumb_overlay,
+.jtk-overlay {
+    z-index: 13 !important;
+    visibility: visible !important;
+}
+
+/* Show endpoint labels on hover */
+._jsPlumb_endpoint:hover .endpoint-label,
+.jtk-endpoint:hover .endpoint-label {
+    display: block;
+}
+
+/* Connection hover styles */
+._jsPlumb_connector:hover,
+.jtk-connector:hover {
+    cursor: pointer;
+}
+
+/* Endpoint hover styles */
+._jsPlumb_endpoint:hover,
+.jtk-endpoint:hover {
+    cursor: crosshair;
+}
+
+/* Window styles */
+.window {
+    background-color: white;
+    border: 1px solid #346789;
+    text-align: center;
+    z-index: 24;
+    cursor: pointer;
+    box-shadow: 2px 2px 19px #aaa;
+    -o-box-shadow: 2px 2px 19px #aaa;
+    -webkit-box-shadow: 2px 2px 19px #aaa;
+    -moz-box-shadow: 2px 2px 19px #aaa;
+    -moz-border-radius: 0.5em;
+    border-radius: 0.5em;
+    position: absolute;
+    color: black;
+    padding: 0.5em;
+    width: 80px;
+    height: 80px;
+    line-height: 80px;
+    -webkit-transition: -webkit-box-shadow 0.15s ease-in;
+    -moz-transition: -moz-box-shadow 0.15s ease-in;
+    -o-transition: -o-box-shadow 0.15s ease-in;
+    transition: box-shadow 0.15s ease-in;
+}
+
+.window:hover {
+    border: 1px solid #123456;
+    box-shadow: 2px 2px 19px #444;
+    -o-box-shadow: 2px 2px 19px #444;
+    -webkit-box-shadow: 2px 2px 19px #444;
+    -moz-box-shadow: 2px 2px 19px #444;
+    opacity: 0.9;
+}
+
+.jtk-connector {
+    z-index: 4;
+}
+
+.jtk-endpoint {
+    z-index: 5;
+}
+
+.jtk-overlay {
+    z-index: 6;
+}
+
+.endpointTargetLabel,
+.endpointSourceLabel {
+    font-size: 0.8em;
+    z-index: 21;
+    padding: 0.2em;
+    border: 1px solid #346789;
+    border-radius: 0.5em;
+    background-color: white;
+    color: #346789;
+    opacity: 0.8;
+    cursor: pointer;
+}
+
+path, .jtk-endpoint {
+    cursor: pointer;
+}
+
+/* Active connection styles */
+.jtk-connector-outline {
+    stroke-width: 2;
+}
+
+/* Selected connection styles */
+.jtk-connector.jtk-hover {
+    stroke-width: 3;
+}
+
+/* Required styles for endpoints and connections */
+.aLabel {
+    background-color: white;
+    padding: 0.4em;
+    font: 12px sans-serif;
+    color: #444;
+    z-index: 21;
+    border: 1px solid #999;
+    border-radius: 2px;
+    opacity: 0.8;
+    cursor: pointer;
+}
+
+/* Dragging state */
+.jtk-drag {
+    filter: drop-shadow(0 0 8px rgba(122, 176, 44, 0.8));
+}
+
+/* Connection animation */
+@keyframes connectionGlow {
+    0% { filter: drop-shadow(0 0 2px rgba(33, 100, 119, 0.3)); }
+    50% { filter: drop-shadow(0 0 8px rgba(33, 100, 119, 0.6)); }
+    100% { filter: drop-shadow(0 0 2px rgba(33, 100, 119, 0.3)); }
+}
+
+.jtk-connector.new-connection {
+    animation: connectionGlow 1.5s ease-in-out infinite;
+}
+
+/* Ensure endpoints are always on top */
+._jsPlumb_endpoint {
+    z-index: 50 !important;
+}
+
+/* Ensure endpoint overlays are always on top */
+._jsPlumb_endpoint_anchor_ {
+    z-index: 51 !important;
+}
+
+/* Container styles */
+.jtk-surface {
+    overflow: hidden !important;
+}
+
+.jtk-surface-nopan {
+    overflow: hidden !important;
+}

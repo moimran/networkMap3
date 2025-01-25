@@ -1,0 +1,35 @@
+{
+  "deviceType": "switch",
+  "interfaces": [
+    {
+      "name": "Ethernet1/1",
+      "type": "Ethernet",
+      "speed": "100Gbps"
+    },
+    {
+      "name": "Ethernet1/2",
+      "type": "Ethernet",
+      "speed": "100Gbps"
+    },
+    {
+      "name": "Ethernet1/3",
+      "type": "Ethernet",
+      "speed": "100Gbps"
+    },
+    {
+      "name": "Ethernet1/4",
+      "type": "Ethernet",
+      "speed": "100Gbps"
+    },
+    {
+      "name": "Ethernet2/1",
+      "type": "Ethernet",
+      "speed": "100Gbps"
+    },
+    {
+      "name": "Ethernet2/2",
+      "type": "Ethernet",
+      "speed": "100Gbps"
+    }
+  ]
+}

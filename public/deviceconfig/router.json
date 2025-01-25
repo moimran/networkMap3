@@ -1,0 +1,35 @@
+{
+  "deviceType": "router",
+  "interfaces": [
+    {
+      "name": "GigabitEthernet0/0",
+      "type": "Ethernet",
+      "speed": "1000Mbps"
+    },
+    {
+      "name": "GigabitEthernet0/1",
+      "type": "Ethernet",
+      "speed": "1000Mbps"
+    },
+    {
+      "name": "Serial0/0/0",
+      "type": "Serial",
+      "speed": "128Kbps"
+    },
+    {
+      "name": "Serial0/0/1",
+      "type": "Serial",
+      "speed": "128Kbps"
+    },
+    {
+      "name": "FastEthernet0/0",
+      "type": "Ethernet",
+      "speed": "100Mbps"
+    },
+    {
+      "name": "FastEthernet0/1",
+      "type": "Ethernet",
+      "speed": "100Mbps"
+    }
+  ]
+}
