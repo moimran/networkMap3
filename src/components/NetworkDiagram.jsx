@@ -16,6 +16,7 @@ import {
 } from '../utils/NetworkDiagramConfig';
 import ConnectionManager from '../utils/ConnectionManager';
 import toast from '../utils/toast'; 
+import NodeConfigModal from './NodeConfigModal';
 
 // Singleton jsPlumb instance management
 const JsPlumbSingleton = (() => {
@@ -85,6 +86,7 @@ const NetworkDiagram = () => {
         stage: 'IDLE' // IDLE, SOURCE_SELECTED
     });
     const [deviceTypeCount, setDeviceTypeCount] = useState({});
+    const [nodeConfigModal, setNodeConfigModal] = useState(null);
 
     // Create a memoized function to generate unique node names
     const generateNodeName = useCallback((deviceType) => {
@@ -114,100 +116,14 @@ const NetworkDiagram = () => {
         const x = Math.round((event.clientX - rect.left) / NETWORK_DIAGRAM_CONFIG.GRID.SIZE) * NETWORK_DIAGRAM_CONFIG.GRID.SIZE;
         const y = Math.round((event.clientY - rect.top) / NETWORK_DIAGRAM_CONFIG.GRID.SIZE) * NETWORK_DIAGRAM_CONFIG.GRID.SIZE;
 
-        // Load device-specific endpoint configuration using icon path
-        const endpointConfig = await EndpointConfigLoader.loadDeviceEndpoints(iconPath);
-
-        // Extract device type from icon path
-        const deviceType = iconPath
-            .split('/')           // Split by path separator
-            .pop()                // Get the filename
-            .replace(/\.(svg|png)$/, '');  // Remove .svg or .png extension
-
-        const nodeId = generateUUID();  // Generate unique node ID
-
-        const newNode = {
-            id: nodeId,
-            type: deviceType,  // Use extracted device type
-            name: generateNodeName(deviceType),
+        // Open node configuration modal
+        setNodeConfigModal({
+            type: nodeType,
             iconPath: iconPath,
-            position: { x, y },
-            // Enhance endpoints with unique identifiers
-            endpoints: (endpointConfig?.interfaces || []).map(endpoint => ({
-                ...endpoint,
-                id: generateUUID(),  // Add unique ID to each endpoint
-                nodeId: nodeId,      // Link endpoint to its node
-                originalName: endpoint.name  // Preserve original name
-            }))
-        };
-
-        // Create node immediately
-        setNodes(prev => [...prev, newNode]);
-
-        // Setup jsPlumb endpoints after rendering
-        setTimeout(() => {
-            const nodeElement = document.getElementById(newNode.id);
-            if (nodeElement && jsPlumbInstance.current) {
-                // Create jsPlumb endpoints for the node
-                const jsPlumbEndpoints = newNode.endpoints.map((endpoint, index) => {
-                    const endpointOptions = {
-                        anchor: ['Left', 'Right', 'Top', 'Bottom'][index % 4],
-                        source: true,
-                        target: true
-                    };
-
-                    return jsPlumbInstance.current.addEndpoint(
-                        nodeElement, 
-                        endpointOptions,
-                        {
-                            endpoint: endpoint.type === 'ethernet' ? DotEndpoint : BlankEndpoint,
-                            paintStyle: { 
-                                fill: endpoint.type === 'ethernet' ? '#0066aa' : '#ff6347',
-                                radius: 5 
-                            }
-                        }
-                    );
-                });
-
-                // Prepare library-specific node data for ConnectionManager
-                const libraryNodeData = {
-                    element: nodeElement,
-                    jsPlumbEndpoints: jsPlumbEndpoints,
-                    id: newNode.id,
-                    type: newNode.type
-                };
-
-                // Register node with ConnectionManager
-                const registrationResult = ConnectionManager.registerNode(
-                    newNode,  // Actual node data
-                    libraryNodeData  // Library-specific node representation
-                );
-
-                // Log registration result
-                Logger.info('Node Registration', {
-                    nodeId: newNode.id,
-                    nodeName: newNode.name,
-                    nodeType: newNode.type,
-                    registrationResult,
-                    endpointCount: newNode.endpoints.length
-                });
-
-                // Store node reference
-                nodesRef.current[newNode.id] = {
-                    node: newNode,
-                    jsPlumbEndpoints: jsPlumbEndpoints
-                };
-            }
-        }, 0);
-
-        Logger.info('Node Created', { 
-            deviceType, 
-            nodeName: newNode.name,
-            iconPath, 
-            position: newNode.position,
-            endpointCount: newNode.endpoints.length
+            x,
+            y
         });
-        return newNode;
-    }, [generateNodeName]);
+    }, []);
 
     /**
      * Handle context menu for node endpoints
@@ -599,6 +515,109 @@ const NetworkDiagram = () => {
         };
     }, [renderExistingConnections]); 
 
+    const createMultipleNodes = useCallback(async (nodeConfig, count) => {
+        const { type, iconPath, x, y } = nodeConfig;
+        const nodes = [];
+
+        // Load device-specific endpoint configuration
+        const endpointConfig = await EndpointConfigLoader.loadDeviceEndpoints(iconPath);
+
+        // Extract device type from icon path
+        const deviceType = iconPath
+            .split('/')           // Split by path separator
+            .pop()                // Get the filename
+            .replace(/\.(svg|png)$/, '');  // Remove .svg or .png extension
+
+        // Create multiple nodes in a grid-like sequence
+        for (let i = 0; i < count; i++) {
+            const nodeId = generateUUID();  // Generate unique node ID
+            const nodeX = x + (i % 5) * 100;  // Spread nodes horizontally
+            const nodeY = y + Math.floor(i / 5) * 100;  // Move to next row after 5 nodes
+
+            const newNode = {
+                id: nodeId,
+                type: deviceType,
+                name: generateNodeName(deviceType),
+                iconPath: iconPath,
+                position: { x: nodeX, y: nodeY },
+                // Enhance endpoints with unique identifiers
+                endpoints: (endpointConfig?.interfaces || []).map(endpoint => ({
+                    ...endpoint,
+                    id: generateUUID(),  // Add unique ID to each endpoint
+                    nodeId: nodeId,      // Link endpoint to its node
+                    originalName: endpoint.name  // Preserve original name
+                }))
+            };
+
+            nodes.push(newNode);
+        }
+
+        // Add nodes to state
+        setNodes(prev => [...prev, ...nodes]);
+
+        // Setup jsPlumb endpoints after rendering
+        setTimeout(() => {
+            nodes.forEach(newNode => {
+                const nodeElement = document.getElementById(newNode.id);
+                if (nodeElement && jsPlumbInstance.current) {
+                    // Create jsPlumb endpoints for the node
+                    const jsPlumbEndpoints = newNode.endpoints.map((endpoint, index) => {
+                        const endpointOptions = {
+                            anchor: ['Left', 'Right', 'Top', 'Bottom'][index % 4],
+                            source: true,
+                            target: true
+                        };
+
+                        return jsPlumbInstance.current.addEndpoint(
+                            nodeElement, 
+                            endpointOptions,
+                            {
+                                endpoint: endpoint.type === 'ethernet' ? DotEndpoint : BlankEndpoint,
+                                paintStyle: { 
+                                    fill: endpoint.type === 'ethernet' ? '#0066aa' : '#ff6347',
+                                    radius: 5 
+                                }
+                            }
+                        );
+                    });
+
+                    // Prepare library-specific node data for ConnectionManager
+                    const libraryNodeData = {
+                        element: nodeElement,
+                        jsPlumbEndpoints: jsPlumbEndpoints,
+                        id: newNode.id,
+                        type: newNode.type
+                    };
+
+                    // Register node with ConnectionManager
+                    ConnectionManager.registerNode(
+                        newNode,  // Actual node data
+                        libraryNodeData  // Library-specific node representation
+                    );
+
+                    // Store node reference
+                    nodesRef.current[newNode.id] = {
+                        node: newNode,
+                        jsPlumbEndpoints: jsPlumbEndpoints
+                    };
+                }
+            });
+        }, 0);
+
+        Logger.info('Multiple Nodes Created', { 
+            deviceType, 
+            nodeCount: nodes.length,
+            iconPath
+        });
+    }, [generateNodeName]);
+
+    const handleNodeConfigSubmit = useCallback((nodeCount) => {
+        if (nodeConfigModal) {
+            createMultipleNodes(nodeConfigModal, nodeCount);
+            setNodeConfigModal(null);
+        }
+    }, [createMultipleNodes, nodeConfigModal]);
+
     // Render network diagram
     return (
         <div 
@@ -610,9 +629,9 @@ const NetworkDiagram = () => {
         >
             {/* Render Nodes */}
             {nodes.map(node => (
-                <div
-                    key={node.id}
+                <div 
                     id={node.id}
+                    key={node.id}
                     className={`network-node ${
                         connectionState.stage === 'SOURCE_SELECTED' 
                             ? 'connection-target-highlight' 
@@ -621,24 +640,13 @@ const NetworkDiagram = () => {
                     style={{
                         position: 'absolute',
                         left: node.position.x,
-                        top: node.position.y,
-                        width: '80px',
-                        height: '80px',
-                        display: 'flex',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        cursor: 'move'
+                        top: node.position.y
                     }}
                     onContextMenu={(e) => handleContextMenu(e, node)}
                 >
                     <img 
                         src={node.iconPath}
                         alt={node.type}
-                        style={{
-                            maxWidth: '100%',
-                            maxHeight: '100%',
-                            objectFit: 'contain'
-                        }}
                     />
                 </div>
             ))}
@@ -677,6 +685,20 @@ const NetworkDiagram = () => {
                         </div>
                     ))}
                 </div>
+            )}
+
+            {/* Node Configuration Modal */}
+            {nodeConfigModal && (
+                <NodeConfigModal 
+                    open={!!nodeConfigModal}
+                    onClose={() => setNodeConfigModal(null)}
+                    nodeConfig={{
+                        type: nodeConfigModal.type,
+                        iconPath: nodeConfigModal.iconPath,
+                        endpoints: nodeConfigModal.endpoints || []
+                    }}
+                    onSubmit={handleNodeConfigSubmit}
+                />
             )}
         </div>
     );
