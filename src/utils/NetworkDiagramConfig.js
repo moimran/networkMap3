@@ -91,11 +91,12 @@ const EndpointConfigLoader = {
      */
     async loadDeviceEndpoints(iconPath) {
         try {
-            // Extract device type by removing path and file extension
+            // Extract device type by removing path and file extension, convert to lowercase
             const deviceType = iconPath
                 .split('/')           // Split by path separator
                 .pop()                // Get the filename
-                .replace(/\.(svg|png)$/, '');  // Remove .svg or .png extension
+                .replace(/\.(svg|png)$/, '')  // Remove .svg or .png extension
+                .toLowerCase();        // Convert to lowercase
 
             const response = await fetch(
                 `${NETWORK_DIAGRAM_CONFIG.PATHS.DEVICE_CONFIG}/${deviceType}.json`

@@ -1,621 +1,414 @@
 import { NETWORK_DIAGRAM_CONFIG, makeId } from './NetworkDiagramConfig';
 import Logger from './Logger';
 
-/**
- * Abstract Connection Manager
- * Provides a flexible interface for managing network connections
- */
-export class ConnectionManager {
-    constructor(library = null) {
-        this.library = library;
-        
-        // Comprehensive connection tracking
-        this.connections = {
-            byEndpoint: new Map(),  // Track connections per endpoint
-            byNode: new Map(),      // Track connections per node
-            total: 0                // Total connections across the network
-        };
-        
-        this.nodeRegistry = {};
-        this.usedEndpoints = new Map();
-        
-        // Configurable connection limits
-        this.MAX_ENDPOINT_CONNECTIONS = 60;  // Maximum connections per endpoint
-        this.MAX_NODE_CONNECTIONS = 120;     // Maximum total connections per node
+// Global topology object, similar to reference project
+const GlobalTopology = {
+    nodes: {},
+    connections: {},
+    lines: {},
+    networks: {},
+    labinfo: {}
+};
 
-        // Node connection usage tracking
-        this.nodeConnectionUsage = new Map();
-        this.deviceTypeCount = {};
-    }
+class ConnectionManager {
+    constructor() {
+        // Singleton global topology
+        this.topology = GlobalTopology;
 
-    /**
-     * Check if a node is registered
-     * @param {string} nodeId - ID of the node to check
-     * @returns {boolean} Whether the node is registered
-     * @throws {Error} If node registry information is incomplete
-     */
-    isNodeRegistered(nodeId) {
-        const nodeRegistry = this.nodeRegistry[nodeId];
-        if (!nodeRegistry) {
-            throw new Error(`Node with ID ${nodeId} is not registered in the node registry`);
-        }
-
-        if (!nodeRegistry.data || !nodeRegistry.data.name) {
-            throw new Error(`Node with ID ${nodeId} is missing required name information. 
-                Ensure all nodes are properly initialized with a name during registration.`);
-        }
-
-        const isRegistered = true;
-        
-        Logger.info('Node Registration Check', {
-            nodeId,
-            nodeName: nodeRegistry.data.name,
-            isRegistered,
-            registeredNodes: Object.keys(this.nodeRegistry).map(id => {
-                const reg = this.nodeRegistry[id];
-                if (!reg.data || !reg.data.name) {
-                    throw new Error(`Incomplete node registry for ID ${id}. 
-                        All nodes must have a name during registration.`);
-                }
-                return `${id}: ${reg.data.name}`;
-            })
-        });
-
-        return isRegistered;
-    }
-
-    /**
-     * Register a new node in the connection manager with a unique name
-     * @param {Object} nodeData - Raw node data
-     * @param {Object} libraryNodeData - Library-specific node representation
-     * @returns {string} Node registration ID
-     * @throws {Error} If node data is incomplete
-     */
-    registerNode(nodeData, libraryNodeData) {
-        // Validate node data
-        if (!nodeData) {
-            throw new Error('Cannot register undefined node');
-        }
-
-        if (!nodeData.type) {
-            throw new Error('Node must have a type');
-        }
-
-        if (!nodeData.name) {
-            // If no name is provided, check libraryNodeData
-            if (libraryNodeData && libraryNodeData.name) {
-                nodeData.name = libraryNodeData.name;
-            } else {
-                throw new Error('Node must have a name during registration');
+        // Connection rules based on interface types
+        this.connectionRules = {
+            interfaceTypeConnections: {
+                'Serial': ['Serial'],
+                'Ethernet': ['Ethernet']
             }
-        }
-
-        // Generate a unique node registration ID
-        const registrationId = makeId();
-
-        // Store node in registry with additional metadata
-        this.nodeRegistry[nodeData.id] = {
-            id: registrationId,
-            data: nodeData,
-            libraryNode: libraryNodeData,
-            connections: []  // Track connections for this node
         };
-
-        Logger.info('Node Registered', {
-            nodeId: nodeData.id,
-            nodeName: nodeData.name,
-            type: nodeData.type,
-            registrationId,
-            endpoints: nodeData.endpoints?.length || 0
-        });
-
-        return registrationId;
     }
 
     /**
-     * Generate a unique endpoint key that considers both node and endpoint
-     * @param {Object} endpoint - Endpoint object
-     * @returns {string} Unique endpoint key
-     * @throws {Error} If endpoint or node information is incomplete
+     * Validate connection between two interfaces
+     * @param {Object} sourceInterface - Source interface details
+     * @param {Object} targetInterface - Target interface details
+     * @returns {boolean} Whether connection is valid
      */
-    generateUniqueEndpointKey(endpoint) {
-        if (!endpoint) {
-            throw new Error('Cannot generate key for undefined endpoint');
-        }
-
-        if (!endpoint.nodeId) {
-            throw new Error('Endpoint must have a valid nodeId');
-        }
-
-        // Retrieve node registry and validate
-        const nodeRegistry = this.nodeRegistry[endpoint.nodeId];
-        if (!nodeRegistry) {
-            throw new Error(`No registry found for node ID: ${endpoint.nodeId}`);
-        }
-
-        if (!nodeRegistry.data || !nodeRegistry.data.name) {
-            throw new Error(`Node with ID ${endpoint.nodeId} is missing required name information`);
-        }
-
-        // Combine node name, endpoint name, and any other unique identifiers
-        return `${nodeRegistry.data.name}-${endpoint.name}-${endpoint.uuid || 'NO_UUID'}`;
-    }
-
-    /**
-     * Get current connections for a specific endpoint
-     * @param {string} endpointKey - Unique endpoint identifier
-     * @returns {Array} Current connections for the endpoint
-     */
-    getEndpointConnections(endpointKey) {
-        return this.connections.byEndpoint.get(endpointKey) || [];
-    }
-
-    /**
-     * Check if an endpoint is available for connection
-     * @param {Object} endpoint - Endpoint to check
-     * @returns {boolean} Whether the endpoint is available
-     * @throws {Error} If endpoint or node information is incomplete
-     */
-    isEndpointAvailable(endpoint) {
-        if (!endpoint) {
-            throw new Error('Cannot check availability for undefined endpoint');
-        }
-
-        if (!endpoint.nodeId) {
-            throw new Error('Endpoint must have a valid nodeId');
-        }
-
-        const endpointKey = this.generateUniqueEndpointKey(endpoint);
-        const currentConnections = this.getEndpointConnections(endpointKey);
-        
-        // Retrieve node registry (already validated in generateUniqueEndpointKey)
-        const nodeRegistry = this.nodeRegistry[endpoint.nodeId];
-
-        // Determine max connections based on endpoint type
-        const maxConnectionsByType = {
-            'ethernet': 10000,     // Most standard Ethernet ports support 2 connections
-            'gigabitethernet': 40000,  // Some GigabitEthernet ports support more
-            'fastethernet': 20000,  // FastEthernet typically supports 2 connections
-            'serial': 20000,           // Serial interfaces typically support fewer connections
-            'default': 1           // Default to 1 connection if type is unknown
-        };
-
-        // Get max connections for this endpoint type, default to 1 if not specified
-        const maxConnections = maxConnectionsByType[endpoint.type?.toLowerCase()] || maxConnectionsByType['default'];
-
-        // Additional tracking mechanism to ensure accurate connection counting
-        const uniqueConnectionsCount = new Set(currentConnections.map(conn => 
-            `${conn.targetNode}-${conn.targetEndpoint}`
-        )).size;
-
-        const isAvailable = uniqueConnectionsCount < maxConnections;
-        
-        Logger.info('Endpoint Availability Detailed Check', {
-            nodeName: nodeRegistry.data.name,
-            nodeId: endpoint.nodeId,
-            endpointName: endpoint.name,
-            endpointType: endpoint.type,
-            currentConnectionEntries: currentConnections.length,
-            uniqueConnectionsCount,
-            maxConnections,
-            isAvailable,
-            connectionDetails: currentConnections.map(conn => ({
-                targetNode: conn.targetNode,
-                targetEndpoint: conn.targetEndpoint
-            }))
-        });
-
-        return isAvailable;
-    }
-
-    /**
-     * Validate connection parameters
-     * @param {Object} sourceNode - Source node
-     * @param {Object} targetNode - Target node
-     * @param {Object} sourceEndpoint - Source endpoint
-     * @param {Object} targetEndpoint - Target endpoint
-     * @throws {Error} If connection parameters are invalid
-     */
-    validateConnectionParameters(sourceNode, targetNode, sourceEndpoint, targetEndpoint) {
-        // Validate nodes
-        if (!sourceNode || !targetNode) {
-            throw new Error('Invalid source or target node: Both nodes must be defined');
-        }
-
-        // Validate node names
-        if (!sourceNode.name || !targetNode.name) {
-            throw new Error('Invalid node names: Both source and target nodes must have names');
-        }
-
-        // Validate endpoints
-        if (!sourceEndpoint || !targetEndpoint) {
-            throw new Error('Source and target endpoints must be specified');
-        }
-
-        // Prevent connections between the same node
-        if (sourceNode.id === targetNode.id) {
-            Logger.error('Connection Creation Failed', {
-                reason: 'Same Node Connection',
-                sourceNodeId: sourceNode.id,
-                sourceNodeName: sourceNode.name,
-                targetNodeId: targetNode.id,
-                targetNodeName: targetNode.name
+    validateConnection(sourceInterface, targetInterface) {
+        // Validate input interfaces
+        if (!sourceInterface || !targetInterface) {
+            Logger.warn('Connection Validation Failed', {
+                message: 'Source or target interface is undefined',
+                sourceInterface,
+                targetInterface
             });
-
-            throw new Error(`Cannot create connection between endpoints of the same node: ${sourceNode.name}`);
-        }
-    }
-
-    /**
-     * Track connection usage for a specific node
-     * @param {string} nodeId - ID of the node
-     * @param {boolean} increment - Whether to increment or decrement connections
-     * @param {Object} nodeInfo - Additional node information
-     * @throws {Error} If node information is incomplete
-     */
-    updateNodeConnectionUsage(nodeId, increment = true, nodeInfo = {}) {
-        // Validate node registry
-        const nodeRegistry = this.nodeRegistry[nodeId];
-        if (!nodeRegistry) {
-            throw new Error(`No registry found for node ID: ${nodeId}`);
+            return false;
         }
 
-        if (!nodeRegistry.data || !nodeRegistry.data.name) {
-            throw new Error(`Node with ID ${nodeId} is missing required name information`);
-        }
+        // Normalize and validate interface types with multiple fallback strategies
+        const extractInterfaceType = (interfaceObj) => {
+            // Try multiple ways to extract interface type
+            const typeExtractors = [
+                () => interfaceObj.type,  // Direct type property
+                () => interfaceObj.interfaceType,  // Alternative type property
+                () => {
+                    // Derive type from interface name (e.g., 'GigabitEthernet0/0' -> 'Ethernet')
+                    const interfaceName = interfaceObj.name || '';
+                    if (interfaceName.toLowerCase().includes('ethernet')) return 'Ethernet';
+                    if (interfaceName.toLowerCase().includes('serial')) return 'Serial';
+                    return undefined;
+                },
+                () => {
+                    // Last resort: use node configuration
+                    const node = this.topology.nodes[interfaceObj.nodeId];
+                    const matchingInterface = node?.interfaces?.find(
+                        iface => iface.name === interfaceObj.name
+                    );
+                    return matchingInterface?.type;
+                }
+            ];
 
-        // Initialize or update node connection tracking
-        if (!this.nodeConnectionUsage.has(nodeId)) {
-            this.nodeConnectionUsage.set(nodeId, {
-                id: nodeId,
-                name: nodeRegistry.data.name,
-                totalEndpoints: 6,  // Default total endpoints
-                usedConnections: 0,
-                availableConnections: 6
-            });
-        }
+            // Try extractors in order
+            for (let extractor of typeExtractors) {
+                const extractedType = extractor();
+                if (extractedType) return extractedType.trim().toLowerCase();
+            }
 
-        const nodeConnections = this.nodeConnectionUsage.get(nodeId);
-        
-        Logger.info('Node Connection Usage Update', {
-            nodeId,
-            nodeName: nodeConnections.name,
-            increment,
-            currentUsedConnections: nodeConnections.usedConnections,
-            totalEndpoints: nodeConnections.totalEndpoints
+            return undefined;
+        };
+
+        const sourceType = extractInterfaceType(sourceInterface);
+        const targetType = extractInterfaceType(targetInterface);
+
+        // Detailed logging for type identification
+        Logger.info('Connection Type Identification', {
+            sourceInterface: {
+                name: sourceInterface.name,
+                originalType: sourceInterface.type,
+                extractedType: sourceType
+            },
+            targetInterface: {
+                name: targetInterface.name,
+                originalType: targetInterface.type,
+                extractedType: targetType
+            }
         });
 
-        // Update connection counts
-        nodeConnections.usedConnections += increment ? 1 : -1;
-        nodeConnections.availableConnections = nodeConnections.totalEndpoints - nodeConnections.usedConnections;
+        // Validate types are present
+        if (!sourceType || !targetType) {
+            Logger.warn('Connection Type Incompatibility', {
+                sourceType,
+                targetType,
+                message: 'Unable to determine interface types',
+                sourceInterfaceDetails: sourceInterface,
+                targetInterfaceDetails: targetInterface
+            });
+            return false;
+        }
+
+        // Update connection rules to handle case-insensitive matching
+        const allowedTypes = this.connectionRules.interfaceTypeConnections[
+            sourceType.charAt(0).toUpperCase() + sourceType.slice(1)
+        ] || this.connectionRules.interfaceTypeConnections[sourceType] || [];
+        
+        const isTypeCompatible = allowedTypes.some(
+            allowedType => allowedType.toLowerCase() === targetType
+        );
+
+        if (!isTypeCompatible) {
+            Logger.warn('Connection Type Incompatibility', {
+                sourceType,
+                targetType,
+                allowedTypes,
+                message: 'Interfaces with incompatible types cannot be connected'
+            });
+            return false;
+        }
+
+        // Generate unique connection key
+        const connectionKey = this.generateConnectionKey(
+            {...sourceInterface, type: sourceType}, 
+            {...targetInterface, type: targetType}
+        );
+        
+        // Check for existing connection with same specific endpoints
+        if (this.topology.connections[connectionKey]) {
+            Logger.warn('Duplicate Connection Attempt', {
+                sourceInterface: sourceInterface.name,
+                targetInterface: targetInterface.name,
+                message: 'This specific interface connection already exists'
+            });
+            return false;
+        }
+
+        return true;
     }
 
     /**
-     * Get connection usage for a specific node
-     * @param {string} nodeId - ID of the node
-     * @returns {Object} Node connection usage details
+     * Generate a unique connection key
+     * @param {Object} sourceInterface - Source interface
+     * @param {Object} targetInterface - Target interface
+     * @returns {string} Unique connection identifier
      */
-    getNodeConnectionUsage(nodeId) {
-        return this.nodeConnectionUsage.get(nodeId) || {
-            totalEndpoints: 6,
-            usedConnections: 0,
-            availableConnections: 6
-        };
+    generateConnectionKey(sourceInterface, targetInterface) {
+        // Sort node IDs and interface names to ensure consistent key generation
+        const sortedNodeIds = [sourceInterface.nodeId, targetInterface.nodeId].sort();
+        const sortedInterfaceNames = [sourceInterface.name, targetInterface.name].sort();
+        
+        return `connection:${sortedNodeIds[0]}:${sortedNodeIds[1]}:${sortedInterfaceNames[0]}:${sortedInterfaceNames[1]}`;
     }
 
     /**
      * Create a connection between two nodes
-     * @param {Object} sourceNode - Source node
-     * @param {Object} targetNode - Target node
-     * @param {string} connectionType - Type of connection
-     * @param {Object} sourceEndpoint - Source endpoint
-     * @param {Object} targetEndpoint - Target endpoint
-     * @returns {Object} Created connection details
+     * @param {Object} sourceNode - Source node details
+     * @param {Object} targetNode - Target node details
+     * @param {Object} sourceInterface - Source interface details
+     * @param {Object} targetInterface - Target interface details
+     * @returns {Object|null} Created connection or null
      */
-    createConnection(sourceNode, targetNode, connectionType = 'ETHERNET', sourceEndpoint = null, targetEndpoint = null) {
-        // Validate connection parameters first
-        this.validateConnectionParameters(sourceNode, targetNode, sourceEndpoint, targetEndpoint);
+    createConnection(sourceNode, targetNode, sourceInterface, targetInterface) {
+        // Comprehensive logging for connection creation attempt
+        Logger.info('Connection Creation Attempt', {
+            sourceNode: {
+                id: sourceNode.id,
+                name: sourceNode.name,
+                fullObject: sourceNode
+            },
+            targetNode: {
+                id: targetNode.id,
+                name: targetNode.name,
+                fullObject: targetNode
+            },
+            sourceInterface: {
+                name: sourceInterface.name,
+                type: sourceInterface.type,
+                interfaceType: sourceInterface.interfaceType,
+                nodeId: sourceInterface.nodeId,
+                fullObject: sourceInterface
+            },
+            targetInterface: {
+                name: targetInterface.name,
+                type: targetInterface.type,
+                interfaceType: targetInterface.interfaceType,
+                nodeId: targetInterface.nodeId,
+                fullObject: targetInterface
+            }
+        });
 
-        // Attach node IDs to endpoints for precise tracking
-        sourceEndpoint.nodeId = sourceNode.id;
-        targetEndpoint.nodeId = targetNode.id;
-
-        // Generate unique keys for endpoints
-        const sourceEndpointKey = this.generateUniqueEndpointKey(sourceEndpoint);
-        const targetEndpointKey = this.generateUniqueEndpointKey(targetEndpoint);
-
-        // Get current connections
-        const sourceConnections = this.getEndpointConnections(sourceEndpointKey);
-        const targetConnections = this.getEndpointConnections(targetEndpointKey);
-
-        // Check for unique connection
-        if (!this.isConnectionUnique(sourceEndpoint, targetEndpoint)) {
-            Logger.error('Connection Creation Failed', {
-                reason: 'Duplicate Connection',
-                sourceNode: {
-                    id: sourceNode.id,
-                    name: sourceNode.name
-                },
-                sourceEndpoint: `${sourceEndpoint.name} (Node: ${sourceEndpoint.nodeId})`,
-                targetNode: {
-                    id: targetNode.id,
-                    name: targetNode.name
-                },
-                targetEndpoint: `${targetEndpoint.name} (Node: ${targetEndpoint.nodeId})`,
-                totalConnections: this.connections.total
+        // Validate connection before proceeding
+        if (!this.validateConnection(
+            {
+                ...sourceInterface, 
+                nodeId: sourceNode.id,
+                name: sourceInterface.name
+            }, 
+            {
+                ...targetInterface, 
+                nodeId: targetNode.id,
+                name: targetInterface.name
+            }
+        )) {
+            // Validation failed, log detailed error
+            Logger.warn('Connection Creation Blocked', {
+                reason: 'Validation Failed',
+                sourceNodeId: sourceNode.id,
+                targetNodeId: targetNode.id,
+                sourceInterface: sourceInterface.name,
+                targetInterface: targetInterface.name
             });
-
-            throw new Error(`Connection between ${sourceEndpoint.name} (Node: ${sourceEndpoint.nodeId}) and ${targetEndpoint.name} (Node: ${targetEndpoint.nodeId}) already exists`);
+            return null;
         }
 
-        // Detailed connection limit checks
-        if (sourceConnections.length >= this.MAX_ENDPOINT_CONNECTIONS) {
-            Logger.error('Connection Creation Failed', {
-                reason: 'Source Endpoint Connection Limit Reached',
-                sourceNode: {
-                    id: sourceNode.id,
-                    name: sourceNode.name
-                },
-                sourceEndpoint: `${sourceEndpoint.name} (Node: ${sourceEndpoint.nodeId})`,
-                sourceConnections: sourceConnections.length,
-                maxEndpointConnections: this.MAX_ENDPOINT_CONNECTIONS
-            });
-
-            throw new Error(`Cannot establish connection: 
-                Source endpoint ${sourceEndpoint.name} (Node: ${sourceEndpoint.nodeId}) has ${sourceConnections.length} connections. 
-                Maximum allowed per endpoint: ${this.MAX_ENDPOINT_CONNECTIONS}`);
-        }
-
-        if (targetConnections.length >= this.MAX_ENDPOINT_CONNECTIONS) {
-            Logger.error('Connection Creation Failed', {
-                reason: 'Target Endpoint Connection Limit Reached',
-                targetNode: {
-                    id: targetNode.id,
-                    name: targetNode.name
-                },
-                targetEndpoint: `${targetEndpoint.name} (Node: ${targetEndpoint.nodeId})`,
-                targetConnections: targetConnections.length,
-                maxEndpointConnections: this.MAX_ENDPOINT_CONNECTIONS
-            });
-
-            throw new Error(`Cannot establish connection: 
-                Target endpoint ${targetEndpoint.name} (Node: ${targetEndpoint.nodeId}) has ${targetConnections.length} connections. 
-                Maximum allowed per endpoint: ${this.MAX_ENDPOINT_CONNECTIONS}`);
-        }
+        // Generate unique connection ID
+        const connectionId = `${sourceNode.id}-${sourceInterface.name}-to-${targetNode.id}-${targetInterface.name}`;
 
         // Create connection object
-        const connectionId = this.generateConnectionId(sourceNode, targetNode);
         const connection = {
             id: connectionId,
-            sourceNode: sourceNode.id,
-            targetNode: targetNode.id,
-            sourceEndpoint: sourceEndpoint.name,
-            targetEndpoint: targetEndpoint.name,
-            type: connectionType,
-            timestamp: new Date().toISOString()
-        };
-
-        // Update connection tracking
-        this.trackConnection(connection, sourceEndpointKey, targetEndpointKey);
-
-        // Update node connection usage
-        this.updateNodeConnectionUsage(sourceNode.id, true, { name: sourceNode.name });
-        this.updateNodeConnectionUsage(targetNode.id, true, { name: targetNode.name });
-
-        // Logging for connection establishment
-        Logger.info('Connection Established', {
-            connectionType,
             sourceNode: {
                 id: sourceNode.id,
                 name: sourceNode.name
             },
-            sourceEndpoint: `${sourceEndpoint.name} (Node: ${sourceEndpoint.nodeId})`,
             targetNode: {
                 id: targetNode.id,
                 name: targetNode.name
             },
-            targetEndpoint: `${targetEndpoint.name} (Node: ${targetEndpoint.nodeId})`,
-            totalConnections: this.connections.total
+            sourceInterface: {
+                name: sourceInterface.name,
+                type: sourceInterface.type || sourceInterface.interfaceType
+            },
+            targetInterface: {
+                name: targetInterface.name,
+                type: targetInterface.type || targetInterface.interfaceType
+            },
+            timestamp: new Date().toISOString()
+        };
+
+        // Store connection in topology
+        this.topology.connections[connectionId] = connection;
+
+        // Log successful connection creation
+        Logger.info('Connection Created Successfully', {
+            connectionId,
+            sourceNodeId: sourceNode.id,
+            targetNodeId: targetNode.id,
+            sourceInterface: sourceInterface.name,
+            targetInterface: targetInterface.name
         });
 
         return connection;
     }
 
     /**
-     * Track a new connection
-     * @param {Object} connection - Connection details
-     * @param {string} sourceEndpointKey - Source endpoint key
-     * @param {string} targetEndpointKey - Target endpoint key
+     * Get all connections for a specific node
+     * @param {string} nodeId - Node identifier
+     * @returns {Array} List of connections involving the node
      */
-    trackConnection(connection, sourceEndpointKey, targetEndpointKey) {
-        // Track by endpoint
-        const updateEndpointConnections = (endpointKey) => {
-            const currentConnections = this.connections.byEndpoint.get(endpointKey) || [];
-            this.connections.byEndpoint.set(endpointKey, [...currentConnections, connection]);
-        };
-
-        updateEndpointConnections(sourceEndpointKey);
-        updateEndpointConnections(targetEndpointKey);
-
-        // Track by node
-        const updateNodeConnections = (nodeId) => {
-            const currentNodeConnections = this.connections.byNode.get(nodeId) || [];
-            this.connections.byNode.set(nodeId, [...currentNodeConnections, connection]);
-        };
-
-        updateNodeConnections(connection.sourceNode);
-        updateNodeConnections(connection.targetNode);
-
-        // Increment total connections
-        this.connections.total++;
-
-        // Detailed logging for connection tracking
-        Logger.info('Connection Tracking Details', {
-            connectionId: connection.id,
-            sourceEndpointKey,
-            targetEndpointKey,
-            sourceNode: connection.sourceNode,
-            targetNode: connection.targetNode,
-            sourceEndpoint: connection.sourceEndpoint,
-            targetEndpoint: connection.targetEndpoint,
-            totalConnections: this.connections.total,
-            byEndpointConnections: {
-                [sourceEndpointKey]: this.connections.byEndpoint.get(sourceEndpointKey)?.length || 0,
-                [targetEndpointKey]: this.connections.byEndpoint.get(targetEndpointKey)?.length || 0
-            },
-            byNodeConnections: {
-                [connection.sourceNode]: this.connections.byNode.get(connection.sourceNode)?.length || 0,
-                [connection.targetNode]: this.connections.byNode.get(connection.targetNode)?.length || 0
-            }
-        });
-    }
-
-    /**
-     * Generate a unique connection ID
-     * @param {Object} sourceNode - Source node
-     * @param {Object} targetNode - Target node
-     * @returns {string} Unique connection identifier
-     */
-    generateConnectionId(sourceNode, targetNode) {
-        return `connection-${sourceNode.id}-${targetNode.id}-${Date.now()}`;
+    getNodeConnections(nodeId) {
+        return Object.values(this.topology.connections)
+            .filter(conn => 
+                conn.sourceNode.id === nodeId || 
+                conn.targetNode.id === nodeId
+            );
     }
 
     /**
      * Remove a connection
-     * @param {string} connectionId - ID of connection to remove
+     * @param {string} connectionKey - Connection key
      */
-    removeConnection(connectionId) {
-        // Find the connection details
-        const connection = this.findConnectionById(connectionId);
+    removeConnection(connectionKey) {
+        const connection = this.topology.connections[connectionKey];
         
         if (connection) {
-            // Update node connection usage (decrement)
-            this.updateNodeConnectionUsage(connection.sourceNode, false);
-            this.updateNodeConnectionUsage(connection.targetNode, false);
+            // Remove from connections and lines
+            delete this.topology.connections[connectionKey];
+            delete this.topology.lines[connection.id];
 
-            // Remove connection from tracking
-            this.untrackConnection(connection);
-
-            // Logging for connection removal
-            Logger.info('Connection Removed', { 
-                connectionId,
-                sourceNode: connection.sourceNode,
-                targetNode: connection.targetNode,
-                remainingConnections: this.connections.total
-            });
+            Logger.info('Connection Removed', { connectionKey });
         }
     }
 
     /**
-     * Find a connection by its ID
-     * @param {string} connectionId - ID of the connection to find
-     * @returns {Object|null} Connection details or null if not found
+     * Reset entire topology
      */
-    findConnectionById(connectionId) {
-        // Implement logic to find connection across all tracked connections
-        for (let [endpointKey, connections] of this.connections.byEndpoint) {
-            const foundConnection = connections.find(conn => conn.id === connectionId);
-            if (foundConnection) return foundConnection;
-        }
-        return null;
+    resetTopology() {
+        this.topology.nodes = {};
+        this.topology.connections = {};
+        this.topology.lines = {};
+        this.topology.networks = {};
+        this.topology.labinfo = {};
+        
+        Logger.info('Topology Reset');
     }
 
     /**
-     * Untrack a connection
-     * @param {Object} connection - Connection to untrack
+     * Get global topology
+     * @returns {Object} Current global topology state
      */
-    untrackConnection(connection) {
-        // Remove from endpoint-based tracking
-        const updateEndpointConnections = (endpointKey) => {
-            const currentConnections = this.connections.byEndpoint.get(endpointKey) || [];
-            this.connections.byEndpoint.set(
-                endpointKey, 
-                currentConnections.filter(conn => conn.id !== connection.id)
-            );
+    getTopology() {
+        return this.topology;
+    }
+
+    /**
+     * Register a new node in the connection manager
+     * @param {Object} nodeData - Raw node data
+     * @param {Object} libraryNodeData - Library-specific node representation
+     * @returns {string} Node registration ID
+     */
+    registerNode(nodeData, libraryNodeData = {}) {
+        // Validate node data
+        if (!nodeData) {
+            throw new Error('Cannot register undefined node');
+        }
+
+        if (!nodeData.id) {
+            throw new Error('Node must have an ID');
+        }
+
+        if (!nodeData.name) {
+            nodeData.name = libraryNodeData.name || `Node-${nodeData.id}`;
+        }
+
+        // Store node in global topology
+        this.topology.nodes[nodeData.id] = {
+            ...nodeData,
+            libraryData: libraryNodeData,
+            connections: []  // Track connections for this node
         };
 
-        // Generate endpoint keys
-        const sourceEndpointKey = this.generateUniqueEndpointKey({
-            nodeId: connection.sourceNode,
-            name: connection.sourceEndpoint
-        });
-        const targetEndpointKey = this.generateUniqueEndpointKey({
-            nodeId: connection.targetNode,
-            name: connection.targetEndpoint
+        // Log node registration
+        Logger.info('Node Registered', {
+            nodeId: nodeData.id,
+            nodeName: nodeData.name,
+            type: nodeData.type,
+            libraryDataAvailable: !!libraryNodeData
         });
 
-        // Update tracking
-        updateEndpointConnections(sourceEndpointKey);
-        updateEndpointConnections(targetEndpointKey);
-
-        // Decrement total connections
-        this.connections.total = Math.max(0, this.connections.total - 1);
+        return nodeData.id;  // Return node ID as registration result
     }
 
     /**
-     * Get all connections for a specific node
-     * @param {string} nodeId - ID of the node
-     * @returns {Array} List of connections
+     * Get a registered node by its ID
+     * @param {string} nodeId - Node identifier
+     * @returns {Object|null} Node details or null if not found
      */
-    getNodeConnections(nodeId) {
-        const nodeRegistry = this.nodeRegistry[nodeId];
-        return nodeRegistry ? nodeRegistry.connections : [];
+    getNode(nodeId) {
+        return this.topology.nodes[nodeId] || null;
     }
 
     /**
-     * Check if a connection already exists between two specific endpoints
-     * @param {Object} sourceEndpoint - Source endpoint
-     * @param {Object} targetEndpoint - Target endpoint
-     * @returns {boolean} Whether the connection already exists
+     * Check if an endpoint is available for connections
+     * @param {Object} endpoint - Endpoint to check
+     * @returns {boolean} Whether the endpoint is available for connections
      */
-    isConnectionUnique(sourceEndpoint, targetEndpoint) {
-        if (!sourceEndpoint || !targetEndpoint) {
-            Logger.warn('Connection Uniqueness Check', {
-                message: 'Invalid source or target endpoint',
-                sourceEndpoint,
-                targetEndpoint
+    isEndpointAvailable(endpoint) {
+        // Validate endpoint input
+        if (!endpoint || !endpoint.nodeId) {
+            Logger.warn('Endpoint Availability Check Failed', {
+                message: 'Invalid or incomplete endpoint',
+                endpoint
             });
             return false;
         }
 
-        // Ensure both endpoints have nodeId
-        if (!sourceEndpoint.nodeId || !targetEndpoint.nodeId) {
-            Logger.warn('Connection Uniqueness Check', {
-                message: 'Endpoint missing nodeId',
-                sourceNodeId: sourceEndpoint.nodeId,
-                targetNodeId: targetEndpoint.nodeId
+        // Find existing connections for this endpoint
+        const existingConnections = Object.values(this.topology.connections)
+            .filter(conn => 
+                (conn.sourceInterface.name === endpoint.name && conn.sourceNode.id === endpoint.nodeId) ||
+                (conn.targetInterface.name === endpoint.name && conn.targetNode.id === endpoint.nodeId)
+            );
+
+        // Log connection details for debugging
+        Logger.info('Endpoint Availability Check', {
+            endpointName: endpoint.name,
+            nodeId: endpoint.nodeId,
+            existingConnectionCount: existingConnections.length,
+            existingConnections: existingConnections.map(conn => ({
+                id: conn.id,
+                sourceNode: conn.sourceNode.id,
+                targetNode: conn.targetNode.id
+            }))
+        });
+
+        // Endpoint is available if no existing connections exist
+        return existingConnections.length === 0;
+    }
+
+    /**
+     * Get available endpoints for a node
+     * @param {string} nodeId - Node identifier
+     * @returns {Array} List of available endpoints
+     */
+    getAvailableEndpoints(nodeId) {
+        const node = this.topology.nodes[nodeId];
+        
+        if (!node || !node.endpoints) {
+            Logger.warn('Available Endpoints Check Failed', {
+                message: 'Node not found or has no endpoints',
+                nodeId
             });
-            return false;
+            return [];
         }
 
-        // Generate unique endpoint keys
-        const sourceEndpointKey = this.generateUniqueEndpointKey(sourceEndpoint);
-        const targetEndpointKey = this.generateUniqueEndpointKey(targetEndpoint);
-
-        // Get current connections for the source endpoint
-        const sourceConnections = this.getEndpointConnections(sourceEndpointKey);
-
-        // Check if a connection to the target endpoint already exists
-        const existingConnection = sourceConnections.find(conn => {
-            // Check if the connection involves the same target node and endpoint
-            return conn.targetNode === targetEndpoint.nodeId && 
-                   conn.targetEndpoint === targetEndpoint.name;
-        });
-
-        Logger.info('Connection Uniqueness Check', {
-            sourceEndpointKey,
-            targetEndpointKey,
-            sourceNodeId: sourceEndpoint.nodeId,
-            targetNodeId: targetEndpoint.nodeId,
-            sourceEndpointName: sourceEndpoint.name,
-            targetEndpointName: targetEndpoint.name,
-            existingConnectionFound: !!existingConnection,
-            sourceConnectionCount: sourceConnections.length
-        });
-
-        return !existingConnection;
+        return node.endpoints.filter(endpoint => this.isEndpointAvailable(endpoint));
     }
 }
 
-// Export a default instance that can be imported and used globally
+// Export a singleton instance
 export default new ConnectionManager();
