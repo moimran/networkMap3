@@ -289,6 +289,44 @@ const NetworkDiagram = () => {
     }, [createNode]);
 
     /**
+     * Handle canvas click to close context menu
+     * @param {Event} e - Click event
+     */
+    const handleCanvasClick = useCallback((e) => {
+        // Check if the click is outside any node or context menu
+        const isClickOnNode = e.target.closest('.network-node');
+        const isClickOnContextMenu = e.target.closest('.context-menu');
+
+        // Close context menu if not clicking on a node or context menu
+        if (!isClickOnNode && !isClickOnContextMenu) {
+            setContextMenu(null);
+            
+            // Reset connection state if in SOURCE_SELECTED stage
+            if (connectionState.stage === 'SOURCE_SELECTED') {
+                setConnectionState({
+                    sourceNode: null,
+                    sourceEndpoint: null,
+                    stage: 'IDLE'
+                });
+            }
+        }
+    }, [connectionState.stage]);
+
+    // Add event listener for canvas click
+    useEffect(() => {
+        const containerElement = containerRef.current;
+        
+        if (containerElement) {
+            containerElement.addEventListener('click', handleCanvasClick);
+
+            // Cleanup event listener
+            return () => {
+                containerElement.removeEventListener('click', handleCanvasClick);
+            };
+        }
+    }, [handleCanvasClick]);
+
+    /**
      * Initialize jsPlumb instance
      */
     useEffect(() => {
@@ -311,6 +349,7 @@ const NetworkDiagram = () => {
             className="network-diagram-container"
             onDragOver={handleDragOver}
             onDrop={handleDrop}
+            onClick={handleCanvasClick}  // Add click handler to container
         >
             {/* Render Nodes */}
             {nodes.map(node => (
