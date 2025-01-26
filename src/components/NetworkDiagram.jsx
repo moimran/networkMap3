@@ -10,473 +10,258 @@
  * - Maintains a clean separation of concerns
  */
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { ready, newInstance, ContainmentType } from "@jsplumb/browser-ui"
 import '../styles/NetworkDiagram.css';
 
-// Constants for configuration paths and defaults
-const DEVICE_CONFIG_PATH = '/deviceconfig';
-const FLOWCHART_CONNECTOR_STYLE = { 
-    stroke: '#007bff', 
-    strokeWidth: 2 
-};
-const DEFAULT_ANCHORS = ['Top', 'Bottom', 'Left', 'Right'];
-const DEFAULT_ENDPOINT_OPTIONS = {
-    type: 'Blank',
-    options: {
-        cssClass: 'endpoint-blank',
-        hoverClass: 'endpoint-hover'
+// Configuration and Path Management
+// Centralized configuration to make path and library changes easier
+const NETWORK_DIAGRAM_CONFIG = {
+    // Centralized path configuration
+    PATHS: {
+        DEVICE_CONFIG: '/configs/devices',
+        ICONS: '/assets/icons',
+        ENDPOINTS: '/configs/endpoints'
+    },
+    
+    // Library configuration for easy swapping
+    LIBRARY_OPTIONS: {
+        jsPlumb: {
+            connectorType: 'Bezier',
+            endpointType: 'Dot'
+        }
     }
 };
 
 /**
- * Custom hook for managing endpoint connections
- * @param {Object} jsPlumbInstance - The jsPlumb library instance
- * @returns {Object} Connection management functions
+ * Performance Monitoring Utility
+ * Provides standardized performance tracking methods
  */
-const useEndpointConnections = (jsPlumbInstance) => {
-    // Use a ref to track initialization to prevent unnecessary re-renders
-    const initializationRef = useRef(false);
+const PerformanceMonitor = {
+    /**
+     * Start measuring performance for a specific operation
+     * @param {string} label - Unique identifier for the performance measurement
+     * @returns {number} Start timestamp
+     */
+    startMeasure: (label) => {
+        console.time(label);
+        return Date.now();
+    },
 
-    // State for managing connection and context menu
-    const [contextMenu, setContextMenu] = useState(null);
-    const [connectionState, setConnectionState] = useState({
-        sourceNode: null,
-        sourceEndpoint: null,
-        targetNode: null,
-        targetEndpoint: null
-    });
+    /**
+     * End performance measurement and log results
+     * @param {number} startTime - Timestamp from startMeasure
+     * @param {string} label - Unique identifier for the performance measurement
+     */
+    endMeasure: (startTime, label) => {
+        const duration = Date.now() - startTime;
+        console.timeEnd(label);
+        
+        // Log performance warnings for slow operations
+        if (duration > 50) {
+            console.warn(`Performance warning: ${label} took ${duration}ms`);
+        }
+    }
+};
 
-    // Memoize the connection creation function
-    const createConnection = useCallback((sourceEndpoint, targetEndpoint) => {
-        console.log('Creating connection', { 
-            sourceEndpointId: sourceEndpoint.id,
-            sourceElementId: sourceEndpoint.elementId,
-            sourceInterfaceName: sourceEndpoint.interfaceName,
-            targetEndpointId: targetEndpoint.id,
-            targetElementId: targetEndpoint.elementId,
-            targetInterfaceName: targetEndpoint.interfaceName
-        });
+/**
+ * Connection State Management Utility
+ * Provides a centralized state management for network connections
+ */
+const ConnectionStateManager = {
+    // Connection creation stages for clear state tracking
+    STAGES: {
+        IDLE: 'idle',
+        SOURCE_SELECTED: 'source_selected',
+        DESTINATION_SELECTED: 'destination_selected'
+    },
 
-        try {
-            // Prevent connecting to the same node
-            if (sourceEndpoint.elementId === targetEndpoint.elementId) {
-                console.warn('Cannot connect endpoints on the same node', { 
-                    sourceElementId: sourceEndpoint.elementId,
-                    targetElementId: targetEndpoint.elementId
-                });
-                return;
-            }
+    /**
+     * Create a connection state handler
+     * @param {Function} setConnectionState - State setter function
+     * @returns {Object} Connection state management methods
+     */
+    createHandler: (setConnectionState) => ({
+        /**
+         * Initiate connection from a source node
+         * @param {Object} sourceNode - Source node details
+         * @param {Object} sourceEndpoint - Selected source endpoint
+         */
+        startConnection: (sourceNode, sourceEndpoint) => {
+            console.log('Connection Creation Started', {
+                sourceNodeId: sourceNode.id,
+                sourceEndpointInterface: sourceEndpoint.interfaceName,
+                timestamp: Date.now()
+            });
 
-            // Create connection with Continuous anchors
-            const connection = jsPlumbInstance.current.connect({
-                source: sourceEndpoint,
-                target: targetEndpoint,
-                connector: 'Flowchart', // More flexible routing
-                paintStyle: FLOWCHART_CONNECTOR_STYLE,
-                anchors: [
-                    ['Continuous', { faces: ['top', 'bottom', 'left', 'right'] }],
-                    ['Continuous', { faces: ['top', 'bottom', 'left', 'right'] }]
-                ],
-                endpoint: DEFAULT_ENDPOINT_OPTIONS,
-                overlays: [
-                    { 
-                        type: 'Label', 
-                        options: { 
-                            label: sourceEndpoint.interfaceName,
-                            location: [0.2, -0.5], 
-                            cssClass: 'connection-label source-label'
-                        }
-                    },
-                    { 
-                        type: 'Label', 
-                        options: { 
-                            label: targetEndpoint.interfaceName,
-                            location: [0.8, -0.5], 
-                            cssClass: 'connection-label destination-label'
-                        }
-                    }
-                ],
-                // Additional flowchart connector options for more flexible routing
-                connectorOptions: {
-                    stub: [30, 30],  // Minimum stub length
-                    gap: 10,          // Small gap between endpoint and connector
-                    cornerRadius: 10, // Rounded corners
-                    midpoint: 0.5     // Centered midpoint
+            setConnectionState(prev => ({
+                ...prev,
+                sourceNode,
+                sourceEndpoint,
+                stage: ConnectionStateManager.STAGES.SOURCE_SELECTED
+            }));
+        },
+
+        /**
+         * Complete connection to a destination node
+         * @param {Object} targetNode - Destination node details
+         * @param {Object} targetEndpoint - Selected target endpoint
+         * @param {Function} createConnectionFn - Function to create connection
+         */
+        completeConnection: (targetNode, targetEndpoint, createConnectionFn) => {
+            setConnectionState(prev => {
+                // Validate connection state before proceeding
+                if (!prev.sourceNode || !prev.sourceEndpoint) {
+                    console.warn('Invalid connection state', {
+                        currentState: prev,
+                        timestamp: Date.now()
+                    });
+                    return prev;
                 }
-            });
 
-            console.log('Connection created successfully', { 
-                connectionId: connection.id,
-                sourceEndpoint: sourceEndpoint.interfaceName,
-                targetEndpoint: targetEndpoint.interfaceName
-            });
+                // Create connection
+                const newConnection = createConnectionFn(
+                    prev.sourceEndpoint, 
+                    targetEndpoint
+                );
 
-            // Reset connection state
+                console.log('Connection Created', {
+                    sourceNodeId: prev.sourceNode.id,
+                    sourceEndpointInterface: prev.sourceEndpoint.interfaceName,
+                    targetNodeId: targetNode.id,
+                    targetEndpointInterface: targetEndpoint.interfaceName,
+                    timestamp: Date.now()
+                });
+
+                // Reset connection state
+                return {
+                    sourceNode: null,
+                    sourceEndpoint: null,
+                    targetNode: null,
+                    targetEndpoint: null,
+                    stage: ConnectionStateManager.STAGES.IDLE
+                };
+            });
+        },
+
+        /**
+         * Reset connection creation process
+         */
+        resetConnection: (setConnectionState) => {
             setConnectionState({
                 sourceNode: null,
                 sourceEndpoint: null,
                 targetNode: null,
-                targetEndpoint: null
-            });
-        } catch (error) {
-            console.error('Connection Error', { 
-                errorMessage: error.message,
-                sourceEndpoint: sourceEndpoint.interfaceName,
-                targetEndpoint: targetEndpoint.interfaceName,
-                errorStack: error.stack
+                targetEndpoint: null,
+                stage: ConnectionStateManager.STAGES.IDLE
             });
         }
-    }, [jsPlumbInstance]);
-
-    // Only log initialization once
-    useEffect(() => {
-        if (!initializationRef.current) {
-            console.log('Initializing useEndpointConnections hook', { 
-                jsPlumbInstance,
-                timestamp: new Date().toISOString(),
-                stackTrace: new Error().stack.split('\n').slice(1, 5).join('\n')
-            });
-            initializationRef.current = true;
-        }
-    }, [jsPlumbInstance]);
-
-    // Memoized right-click handler
-    const handleRightClick = useCallback((e, nodes) => {
-        console.log('Right-click event triggered', { 
-            event: {
-                type: e.type,
-                target: e.target.id || e.target.className
-            }, 
-            nodesCount: nodes.length,
-            nodeIds: nodes.map(node => node.id) 
-        });
-        
-        e.preventDefault();
-        
-        const targetNode = e.target.closest('.diagram-node');
-        if (targetNode) {
-            const nodeId = targetNode.id;
-            const node = nodes.find(n => n.id === nodeId);
-            
-            console.log('Right-click on node', { 
-                nodeId, 
-                nodeDetails: node ? {
-                    id: node.id,
-                    type: node.type
-                } : null
-            });
-            
-            // Use stored endpoints for the node
-            const endpoints = node.endpoints || [];
-            
-            console.log('Node endpoints', { 
-                nodeId, 
-                endpointCount: endpoints.length,
-                endpointSummary: endpoints.map(ep => ({
-                    id: ep.id,
-                    interfaceName: ep.interfaceName
-                }))
-            });
-            
-            setContextMenu({
-                x: e.clientX,
-                y: e.clientY,
-                node: node,
-                endpoints: endpoints
-            });
-        }
-    }, []);
-
-    // Memoized endpoint selection handler
-    const handleEndpointSelect = useCallback((endpoint, node) => {
-        console.log('Endpoint selection', { 
-            endpointId: endpoint.id,
-            endpointInterfaceName: endpoint.interfaceName,
-            nodeId: node.id,
-            currentConnectionState: {
-                hasSourceEndpoint: !!connectionState.sourceEndpoint,
-                hasTargetEndpoint: !!connectionState.targetEndpoint
-            }
-        });
-
-        // If no source is selected, set as source
-        if (!connectionState.sourceEndpoint) {
-            console.log('Setting source endpoint', { 
-                sourceEndpointId: endpoint.id, 
-                sourceNodeId: node.id 
-            });
-
-            setConnectionState(prev => ({
-                ...prev,
-                sourceNode: node,
-                sourceEndpoint: endpoint
-            }));
-            setContextMenu(null);
-        } 
-        // If source is already selected, set as target
-        else {
-            console.log('Setting target endpoint', { 
-                targetEndpointId: endpoint.id, 
-                targetNodeId: node.id,
-                sourceEndpointId: connectionState.sourceEndpoint.id 
-            });
-
-            setConnectionState(prev => ({
-                ...prev,
-                targetNode: node,
-                targetEndpoint: endpoint
-            }));
-            
-            // Create connection
-            createConnection(
-                connectionState.sourceEndpoint, 
-                endpoint
-            );
-            
-            // Reset context menu and connection state
-            setContextMenu(null);
-        }
-    }, [connectionState, createConnection]);
-
-    // Memoized context menu close handler
-    const handleCloseContextMenu = useCallback(() => {
-        console.log('Closing context menu');
-        setContextMenu(null);
-    }, []);
-
-    // Return hook methods
-    return {
-        contextMenu,
-        connectionState,
-        handleRightClick,
-        handleEndpointSelect,
-        handleCloseContextMenu
-    };
+    })
 };
 
 /**
- * Create a new jsPlumb instance with standardized configuration
- * @param {HTMLElement} container - The container element for the jsPlumb instance
- * @returns {Object} - Configured jsPlumb instance
+ * Batch-optimized connection creation
+ * Provides a standardized method for creating network connections
+ * @param {Object} jsPlumbInstance - jsPlumb library instance
+ * @param {Object} sourceEndpoint - Source endpoint for connection
+ * @param {Object} targetEndpoint - Target endpoint for connection
+ * @returns {Object|null} Created connection or null
  */
-const createNewInstance = (container) => {
-    return newInstance({
-        container: container,
-        dragOptions: {
-            cursor: 'pointer',
-            zIndex: 2000,
-            grid: { w: 20, h: 20 },
-            containment: ContainmentType.notNegative
-        }
-    });
-};
-
-/**
- * Safely extract configuration file name from icon path
- * @param {string} iconPath - Path to the icon
- * @returns {string} Extracted configuration file name
- */
-const extractConfigFileName = (iconPath) => {
-    try {
-        return iconPath.split('/').pop().replace(/\.(svg|png)$/, '.json');
-    } catch (error) {
-        console.warn('Error extracting config file name:', error);
+const createBatchConnection = (jsPlumbInstance, sourceEndpoint, targetEndpoint) => {
+    // Validate jsPlumb instance
+    if (!jsPlumbInstance || !jsPlumbInstance.current) {
+        console.error('Invalid jsPlumb Instance for connection', {
+            timestamp: new Date().toISOString()
+        });
         return null;
     }
-};
 
-/**
- * Calculate the most appropriate anchor position based on device location
- * @param {Object} sourceElement - Source DOM element
- * @param {Object} targetElements - Array of target DOM elements
- * @returns {string} Recommended anchor position
- */
-const calculateDynamicAnchor = (sourceElement, targetElements) => {
-    if (!sourceElement || !targetElements || targetElements.length === 0) {
-        return 'Bottom'; // Default fallback
-    }
+    let createdConnection = null;
 
-    // Get source element's bounding rectangle
-    const sourceRect = sourceElement.getBoundingClientRect();
-    const sourceCenterX = sourceRect.left + sourceRect.width / 2;
-    const sourceCenterY = sourceRect.top + sourceRect.height / 2;
-
-    // Calculate average position of target elements
-    const avgTargetPosition = targetElements.reduce((acc, target) => {
-        const targetRect = target.getBoundingClientRect();
-        return {
-            x: acc.x + (targetRect.left + targetRect.width / 2),
-            y: acc.y + (targetRect.top + targetRect.height / 2)
-        };
-    }, { x: 0, y: 0 });
-
-    avgTargetPosition.x /= targetElements.length;
-    avgTargetPosition.y /= targetElements.length;
-
-    // Calculate relative positioning
-    const deltaX = avgTargetPosition.x - sourceCenterX;
-    const deltaY = avgTargetPosition.y - sourceCenterY;
-
-    // Determine anchor based on relative position
-    if (Math.abs(deltaX) > Math.abs(deltaY)) {
-        return deltaX > 0 ? 'Right' : 'Left';
-    } else {
-        return deltaY > 0 ? 'Bottom' : 'Top';
-    }
-};
-
-/**
- * Create endpoints from device configuration with dynamic anchor positioning
- * @param {Object} jsPlumbInstance - jsPlumb library instance
- * @param {HTMLElement} element - DOM element to add endpoints to
- * @param {Object} config - Device configuration object
- * @param {Function} registerEndpoints - Function to register node endpoints
- * @param {Array} [otherNodes] - Optional array of other nodes for positioning calculation
- * @returns {Array} Created endpoints
- */
-const createConfiguredEndpoints = (jsPlumbInstance, element, config, registerEndpoints, otherNodes = []) => {
-    if (!config || !config.interfaces) {
-        console.warn('No interfaces found in configuration');
-        return [];
-    }
-
-    const anchorPositions = [
-        'Top', 'Bottom', 'Left', 'Right',
-        'TopLeft', 'TopRight', 'BottomLeft', 'BottomRight'
-    ];
-
-    // Safely manage the element
-    try {
-        // Use a try-catch to handle potential method variations
-        if (typeof jsPlumbInstance.current.manage === 'function') {
-            jsPlumbInstance.current.manage(element);
-        } else if (typeof jsPlumbInstance.current.addToDragSelection === 'function') {
-            jsPlumbInstance.current.addToDragSelection(element);
-        }
-    } catch (managementError) {
-        console.warn('Could not manage element:', managementError);
-    }
-
-    // Convert otherNodes to DOM elements if they are not already
-    const targetElements = otherNodes
-        .map(node => document.getElementById(node.id))
-        .filter(el => el !== null);
-
-    const createdEndpoints = config.interfaces.map((iface, index) => {
+    // Use batch to optimize connection creation
+    jsPlumbInstance.current.batch(() => {
         try {
-            // Dynamically calculate anchor if other nodes are provided
-            const dynamicAnchor = targetElements.length > 0
-                ? calculateDynamicAnchor(element, targetElements)
-                : anchorPositions[index % anchorPositions.length];
-
-            const endpointOptions = {
-                anchor: dynamicAnchor,
-                endpoint: DEFAULT_ENDPOINT_OPTIONS,
-                connectorOverlays: [{ 
-                    type: 'Label', 
-                    options: { 
-                        label: iface.name,
-                        location: 0.5,
-                        cssClass: 'connection-label' 
+            // Create connection with comprehensive options
+            createdConnection = jsPlumbInstance.current.connect({
+                source: sourceEndpoint,
+                target: targetEndpoint,
+                connector: [
+                    NETWORK_DIAGRAM_CONFIG.LIBRARY_OPTIONS.jsPlumb.connectorType, 
+                    { 
+                        curviness: 50,  // Smooth curve
+                        stub: 20,       // Stub length
+                        gap: 5          // Gap between connector and endpoint
                     }
-                }],
-                source: true,
-                target: true,
-                maxConnections: -1
-            };
-
-            // Add the endpoint with enhanced error handling
-            let endpoint;
-            try {
-                endpoint = jsPlumbInstance.current.addEndpoint(element, endpointOptions);
-            } catch (addEndpointError) {
-                console.error('Failed to add endpoint:', {
-                    error: addEndpointError,
-                    interfaceName: iface.name,
-                    elementId: element.id
-                });
-                return null;
-            }
-
-            if (!endpoint) {
-                console.error(`Failed to create endpoint for interface ${iface.name}`);
-                return null;
-            }
-
-            // Attach interface name and dynamic anchor to the endpoint
-            endpoint.interfaceName = iface.name;
-            endpoint.dynamicAnchor = dynamicAnchor;
-
-            return endpoint;
-        } catch (error) {
-            console.error(`Comprehensive error creating endpoint for ${iface.name}:`, {
-                errorMessage: error.message,
-                errorStack: error.stack,
-                interfaceDetails: iface
+                ],
+                paintStyle: { 
+                    strokeWidth: 2, 
+                    stroke: '#61dafb',  // React blue
+                    outlineStroke: 'transparent',
+                    outlineWidth: 2
+                },
+                hoverPaintStyle: { 
+                    strokeWidth: 3, 
+                    stroke: '#ff6347'  // Highlight color
+                },
+                overlays: [
+                    ['Arrow', { 
+                        location: 1,     // Arrow at the end
+                        width: 10,       // Arrow width
+                        length: 10       // Arrow length
+                    }]
+                ],
+                endpoint: NETWORK_DIAGRAM_CONFIG.LIBRARY_OPTIONS.jsPlumb.endpointType,
+                endpointStyle: { 
+                    radius: 5, 
+                    fill: '#61dafb' 
+                }
             });
-            return null;
+
+            // Add connection metadata
+            if (createdConnection) {
+                createdConnection.sourceInterfaceName = sourceEndpoint.interfaceName;
+                createdConnection.targetInterfaceName = targetEndpoint.interfaceName;
+            }
+
+            console.log('Connection Created', {
+                sourceId: sourceEndpoint.elementId,
+                targetId: targetEndpoint.elementId,
+                timestamp: new Date().toISOString()
+            });
+        } catch (connectionError) {
+            console.error('Batch connection creation failed', {
+                error: connectionError,
+                sourceEndpoint,
+                targetEndpoint,
+                timestamp: new Date().toISOString()
+            });
         }
-    }).filter(endpoint => endpoint !== null);
+    });
 
-    // Register endpoints for this node
-    registerEndpoints(element.id, createdEndpoints);
-
-    return createdEndpoints;
+    return createdConnection;
 };
 
 /**
- * Create default endpoints for a node
- * @param {Object} jsPlumbInstance - jsPlumb library instance
- * @param {HTMLElement} element - DOM element to add endpoints to
- * @returns {Array} Created endpoints
+ * Main Network Diagram Component
+ * Provides a flexible and modular network visualization interface
  */
-const createDefaultEndpoints = (jsPlumbInstance, element) => {
-    // Safely manage the element
-    try {
-        // Use a try-catch to handle potential method variations
-        if (typeof jsPlumbInstance.current.manage === 'function') {
-            jsPlumbInstance.current.manage(element);
-        } else if (typeof jsPlumbInstance.current.addToDragSelection === 'function') {
-            jsPlumbInstance.current.addToDragSelection(element);
-        }
-    } catch (managementError) {
-        console.warn('Could not manage element:', managementError);
-    }
-
-    return DEFAULT_ANCHORS.map(anchor => {
-        try {
-            const endpoint = jsPlumbInstance.current.addEndpoint(element, {
-                anchor: anchor,
-                endpoint: DEFAULT_ENDPOINT_OPTIONS,
-                source: true,
-                target: true,
-                maxConnections: -1
-            });
-
-            return endpoint;
-        } catch (error) {
-            console.error(`Failed to create default endpoint at ${anchor}:`, error);
-            return null;
-        }
-    }).filter(endpoint => endpoint !== null);
-};
-
-const NetworkDiagram = () => {
+export default function NetworkDiagram() {
+    // Refs for managing jsPlumb and container
     const containerRef = useRef(null);
     const jsPlumbInstance = useRef(null);
+
+    // State management for nodes and connections
     const [nodes, setNodes] = useState([]);
+    const [connectionState, setConnectionState] = useState({
+        sourceNode: null,
+        sourceEndpoint: null,
+        targetNode: null,
+        targetEndpoint: null,
+        stage: ConnectionStateManager.STAGES.IDLE
+    });
+    const [contextMenu, setContextMenu] = useState(null);
 
-    // Use the custom endpoint connection hook
-    const {
-        contextMenu,
-        connectionState,
-        handleRightClick,
-        handleEndpointSelect,
-        handleCloseContextMenu
-    } = useEndpointConnections(jsPlumbInstance);
-
-    // Initialize jsPlumb
+    // Initialize jsPlumb instance
     useEffect(() => {
         if (!containerRef.current) return;
 
@@ -491,21 +276,19 @@ const NetworkDiagram = () => {
         };
     }, []);
 
-    // Add endpoints to nodes after they're added
+    // Dynamically add endpoints to nodes
     useEffect(() => {
         if (!jsPlumbInstance.current) return;
 
         nodes.forEach(node => {
             const element = document.getElementById(node.id);
             if (element) {
-                // Get device config
+                // Dynamically load device-specific configuration
                 const configFileName = extractConfigFileName(node.iconPath);
                 
                 if (!configFileName) {
-                    // Fallback to default endpoints if config extraction fails
+                    // Fallback to default endpoints
                     const defaultEndpoints = createDefaultEndpoints(jsPlumbInstance, element);
-                    
-                    // Update node with endpoints
                     setNodes(prevNodes => 
                         prevNodes.map(n => 
                             n.id === node.id 
@@ -516,22 +299,13 @@ const NetworkDiagram = () => {
                     return;
                 }
 
-                // Fetch device configuration dynamically
-                fetch(`${DEVICE_CONFIG_PATH}/${configFileName}`)
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error(`No configuration found for ${configFileName}`);
-                        }
-                        return response.json();
-                    })
+                // Fetch and apply device-specific endpoint configuration
+                fetch(`${NETWORK_DIAGRAM_CONFIG.PATHS.DEVICE_CONFIG}/${configFileName}`)
+                    .then(response => response.ok ? response.json() : null)
                     .then(config => {
-                        // Try to create configured endpoints, fallback to default if it fails
-                        const configuredEndpoints = createConfiguredEndpoints(
-                            jsPlumbInstance, 
-                            element, 
-                            config, 
-                            () => {} // No need for separate registration
-                        );
+                        const configuredEndpoints = config 
+                            ? createConfiguredEndpoints(jsPlumbInstance, element, config, () => {}) 
+                            : createDefaultEndpoints(jsPlumbInstance, element);
                         
                         // Update node with endpoints
                         setNodes(prevNodes => 
@@ -541,26 +315,10 @@ const NetworkDiagram = () => {
                                     : n
                             )
                         );
-
-                        if (configuredEndpoints.length === 0) {
-                            const defaultEndpoints = createDefaultEndpoints(jsPlumbInstance, element);
-                            
-                            // Update node with default endpoints
-                            setNodes(prevNodes => 
-                                prevNodes.map(n => 
-                                    n.id === node.id 
-                                        ? {...n, endpoints: defaultEndpoints} 
-                                        : n
-                                )
-                            );
-                        }
                     })
                     .catch(error => {
                         console.error(`Error loading config for ${node.id}:`, error);
-                        // Create default endpoints if config loading fails
                         const defaultEndpoints = createDefaultEndpoints(jsPlumbInstance, element);
-                        
-                        // Update node with default endpoints
                         setNodes(prevNodes => 
                             prevNodes.map(n => 
                                 n.id === node.id 
@@ -573,18 +331,7 @@ const NetworkDiagram = () => {
         });
     }, [nodes]);
 
-    // Add right-click event listener
-    useEffect(() => {
-        const container = containerRef.current;
-        if (container) {
-            const rightClickHandler = (e) => handleRightClick(e, nodes);
-            container.addEventListener('contextmenu', rightClickHandler);
-            return () => {
-                container.removeEventListener('contextmenu', rightClickHandler);
-            };
-        }
-    }, [nodes, handleRightClick]);
-
+    // Drag and drop event handlers
     const handleDragOver = (e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
@@ -597,12 +344,12 @@ const NetworkDiagram = () => {
         
         if (!nodeType || !iconPath) return;
 
-        // Get drop coordinates relative to container
+        // Calculate drop coordinates
         const rect = containerRef.current.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        // Create new node
+        // Create new node with unique identifier
         const newNode = {
             id: `${nodeType}-${Date.now()}`,
             type: nodeType,
@@ -613,34 +360,110 @@ const NetworkDiagram = () => {
         setNodes(prev => [...prev, newNode]);
     };
 
+    // Connection creation function
+    const createConnection = useCallback((sourceEndpoint, targetEndpoint) => {
+        const startTime = PerformanceMonitor.startMeasure('createConnection');
+
+        // Create connection using batch method
+        const connection = createBatchConnection(
+            jsPlumbInstance, 
+            sourceEndpoint, 
+            targetEndpoint
+        );
+
+        // Track performance
+        PerformanceMonitor.endMeasure(startTime, 'createConnection');
+
+        return connection;
+    }, []);
+
+    // Connection state handler
+    const connectionStateHandler = useMemo(() => 
+        ConnectionStateManager.createHandler(setConnectionState), 
+        [setConnectionState]
+    );
+
+    // Endpoint selection handler
+    const handleEndpointSelect = useCallback((selectedEndpoint, selectedNode) => {
+        // Handle connection creation based on current stage
+        switch (connectionState.stage) {
+            case ConnectionStateManager.STAGES.IDLE:
+                connectionStateHandler.startConnection(selectedNode, selectedEndpoint);
+                break;
+            
+            case ConnectionStateManager.STAGES.SOURCE_SELECTED:
+                connectionStateHandler.completeConnection(
+                    selectedNode, 
+                    selectedEndpoint, 
+                    createConnection
+                );
+                break;
+            
+            default:
+                console.warn('Unexpected connection stage', {
+                    stage: connectionState.stage,
+                    timestamp: Date.now()
+                });
+        }
+
+        // Close context menu
+        setContextMenu(null);
+    }, [connectionState, connectionStateHandler, createConnection]);
+
     return (
         <div 
             ref={containerRef}
-            className="diagram-container"
+            className="network-diagram-container"
             onDragOver={handleDragOver}
             onDrop={handleDrop}
-            onClick={handleCloseContextMenu}
         >
+            {/* Render network nodes */}
             {nodes.map(node => (
                 <div
                     key={node.id}
                     id={node.id}
-                    className="diagram-node"
+                    className={`network-node ${
+                        connectionState.stage === ConnectionStateManager.STAGES.SOURCE_SELECTED 
+                            ? 'connection-target-highlight' 
+                            : ''
+                    }`}
                     style={{
                         position: 'absolute',
                         left: node.position.x,
                         top: node.position.y,
                         cursor: 'move'
                     }}
+                    onContextMenu={(event) => {
+                        // Context menu handling based on connection stage
+                        const nodeEndpoints = node.endpoints || [];
+                        
+                        event.preventDefault();
+                        event.stopPropagation();
+
+                        setContextMenu({
+                            x: event.clientX,
+                            y: event.clientY,
+                            node: node,
+                            endpoints: nodeEndpoints,
+                            type: connectionState.stage === ConnectionStateManager.STAGES.SOURCE_SELECTED 
+                                ? 'destination-selection' 
+                                : 'source-selection'
+                        });
+                    }}
                 >
                     <img 
                         src={node.iconPath}
                         alt={node.type}
                         draggable={false}
+                        style={{
+                            maxWidth: '100%',
+                            maxHeight: '100%'
+                        }}
                     />
                 </div>
             ))}
             
+            {/* Context Menu Rendering */}
             {contextMenu && (
                 <div 
                     className="context-menu"
@@ -652,38 +475,29 @@ const NetworkDiagram = () => {
                         border: '1px solid #ccc',
                         borderRadius: '4px',
                         padding: '10px',
-                        boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
                         zIndex: 1000
                     }}
                 >
                     <h4>
-                        {connectionState.sourceEndpoint 
+                        {contextMenu.type === 'destination-selection'
                             ? 'Select Destination Endpoint' 
                             : 'Select Source Endpoint'}
                     </h4>
-                    {contextMenu.endpoints.map((endpoint, index) => {
-                        const interfaceName = endpoint.interfaceName;
-                        return (
-                            <div 
-                                key={index}
-                                onClick={() => handleEndpointSelect(endpoint, contextMenu.node)}
-                                style={{
-                                    cursor: 'pointer',
-                                    padding: '5px',
-                                    borderBottom: '1px solid #eee',
-                                    backgroundColor: connectionState.sourceEndpoint === endpoint 
-                                        ? '#e0e0e0' 
-                                        : 'transparent'
-                                }}
-                            >
-                                {interfaceName}
-                            </div>
-                        );
-                    })}
+                    {contextMenu.endpoints.map((endpoint, index) => (
+                        <div 
+                            key={`${endpoint.id}-${index}`}
+                            onClick={() => handleEndpointSelect(endpoint, contextMenu.node)}
+                            style={{
+                                cursor: 'pointer',
+                                padding: '5px',
+                                borderBottom: '1px solid #eee'
+                            }}
+                        >
+                            {endpoint.interfaceName}
+                        </div>
+                    ))}
                 </div>
             )}
         </div>
     );
-};
-
-export default NetworkDiagram;
+}
