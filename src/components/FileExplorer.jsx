@@ -127,10 +127,20 @@ const FileExplorer = () => {
   const [dialogType, setDialogType] = useState('file');
   const [itemName, setItemName] = useState('');
   const [currentPath, setCurrentPath] = useState('');
-  const [expandedFolders, setExpandedFolders] = useState(new Set());
+  const [expandedFolders, setExpandedFolders] = useState({});
   const [selectedItem, setSelectedItem] = useState(null);
-  const [open, setOpen] = useState({});
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
   
+  const colors = {
+    folder: '#ffd700',        // Golden yellow for folders
+    folderOpen: '#ffb900',    // Darker yellow for open folders
+    file: '#4a90e2',         // Blue for files
+    delete: '#ff4d4f',       // Red for delete button
+    add: '#52c41a',          // Green for add button
+    hover: 'rgba(0, 0, 0, 0.1)'
+  };
+
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -147,10 +157,12 @@ const FileExplorer = () => {
     }
   };
 
-  const handleCreateClick = (type, path = '') => {
+  const handleCreateClick = (type, item = null) => {
+    const targetPath = item?.path || (selectedItem?.type === 'folder' ? selectedItem.path : '');
+    console.log('Creating in path:', targetPath); 
     setDialogType(type);
     setItemName('');
-    setCurrentPath(path);
+    setCurrentPath(targetPath);
     setOpenDialog(true);
   };
 
@@ -163,6 +175,7 @@ const FileExplorer = () => {
     if (!itemName) return;
 
     try {
+      console.log('Creating item in path:', currentPath); 
       const cleanPath = currentPath.startsWith('/') ? currentPath.slice(1) : currentPath;
       
       if (dialogType === 'folder') {
@@ -171,6 +184,7 @@ const FileExplorer = () => {
           name: itemName
         });
       } else {
+        // Send raw filename, backend will handle extension
         await axios.post('/api/create-file', {
           path: cleanPath,
           name: itemName,
@@ -184,149 +198,124 @@ const FileExplorer = () => {
     }
   };
 
-  const handleDelete = async (item) => {
+  const handleDeleteClick = (item, e) => {
+    e.stopPropagation();
+    setItemToDelete(item);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!itemToDelete) return;
+
     try {
+      // Send the path with .json extension if it's already there
+      const path = itemToDelete.path;
       await axios.delete('/api/delete-item', {
         data: {
-          path: item.path,
-          type: item.type
+          path,
+          type: itemToDelete.type
         }
       });
       await loadFiles();
+      if (selectedItem?.path === itemToDelete.path) {
+        setSelectedItem(null);
+      }
+      setDeleteDialogOpen(false);
+      setItemToDelete(null);
     } catch (error) {
       console.error('Error deleting item:', error);
     }
   };
 
-  const toggleFolder = (path) => {
-    setExpandedFolders(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(path)) {
-        newSet.delete(path);
-      } else {
-        newSet.add(path);
-      }
-      return newSet;
-    });
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setItemToDelete(null);
   };
 
   const handleFileClick = (file) => {
     setSelectedFile(file);
+    setSelectedItem(file);
+    // File name already comes without extension from the backend
     navigate(`/diagram/${file.name}`);
   };
 
-  const renderTreeItem = (item, depth = 0) => {
-    const isFolder = item.type === 'folder';
-    const isExpanded = expandedFolders.has(item.path);
-    const hasChildren = isFolder && item.children && item.children.length > 0;
-
-    return (
-      <React.Fragment key={item.path}>
-        <TreeItem
-          onMouseEnter={() => setSelectedItem(item)}
-          onMouseLeave={() => setSelectedItem(null)}
-        >
-          <TreeLine depth={depth} />
-          <TreeItemContent
-            depth={depth}
-            onClick={() => isFolder ? toggleFolder(item.path) : handleFileClick(item)}
-          >
-            {isFolder && (hasChildren ? (
-              isExpanded ? <FaChevronDown size={12} /> : <FaChevronRight size={12} />
-            ) : <span style={{ width: '12px' }} />)}
-            {isFolder ? (isExpanded ? <FaFolderOpen /> : <FaFolder />) : <FaFile />}
-            <span>{item.name}</span>
-          </TreeItemContent>
-          
-          {selectedItem === item && (
-            <TreeItemActions className="actions">
-              {isFolder && (
-                <>
-                  <Tooltip title="New File">
-                    <MuiIconButton
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCreateClick('file', item.path);
-                      }}
-                    >
-                      <FaPlus size={12} />
-                    </MuiIconButton>
-                  </Tooltip>
-                  <Tooltip title="New Folder">
-                    <MuiIconButton
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCreateClick('folder', item.path);
-                      }}
-                    >
-                      <FaFolderPlus size={12} />
-                    </MuiIconButton>
-                  </Tooltip>
-                </>
-              )}
-              <Tooltip title="Delete">
-                <MuiIconButton
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(item);
-                  }}
-                >
-                  <FaTrash size={12} />
-                </MuiIconButton>
-              </Tooltip>
-            </TreeItemActions>
-          )}
-        </TreeItem>
-        {isExpanded && hasChildren && item.children.map(child => renderTreeItem(child, depth + 1))}
-      </React.Fragment>
-    );
-  };
-
-  const handleClick = (path) => {
-    setOpen(prev => ({
+  const toggleFolder = (folder, e) => {
+    e.stopPropagation(); 
+    setExpandedFolders(prev => ({
       ...prev,
-      [path]: !prev[path]
+      [folder.path]: !prev[folder.path]
     }));
   };
 
-  const renderFileTree = (items, level = 0) => {
-    return items.map((item) => {
-      const isFolder = item.type === 'folder';
-      const isOpen = open[item.path];
+  const handleItemClick = (item, e) => {
+    e.stopPropagation(); 
+    setSelectedItem(item);
+    if (item.type === 'file') {
+      handleFileClick(item);
+    }
+  };
 
-      return (
-        <React.Fragment key={item.path}>
-          <ListItem
-            button
-            onClick={() => isFolder ? handleClick(item.path) : handleFileClick(item)}
-            sx={{ pl: level * 2 }}
-          >
-            <ListItemIcon>
-              {isFolder ? (isOpen ? <FaFolderOpen /> : <FaFolder />) : <FaFile />}
-            </ListItemIcon>
-            <ListItemText primary={item.name} />
-            {isFolder && (
-              <IconButton onClick={(e) => {
-                e.stopPropagation();
-                handleClick(item.path);
-              }}>
-                {isOpen ? <FaChevronDown /> : <FaChevronRight />}
+  const renderTreeItem = (item, depth = 0) => {
+    const isExpanded = expandedFolders[item.path];
+    const isSelected = selectedItem?.path === item.path;
+
+    return (
+      <React.Fragment key={item.path}>
+        <TreeItem 
+          onClick={(e) => handleItemClick(item, e)}
+          style={{ 
+            backgroundColor: isSelected ? colors.hover : 'transparent' 
+          }}
+        >
+          <TreeLine depth={depth} />
+          <TreeItemContent depth={depth}>
+            {item.type === 'folder' && (
+              <IconButton 
+                onClick={(e) => toggleFolder(item, e)}
+                style={{ padding: '2px' }}
+              >
+                {isExpanded ? <FaChevronDown color="#666" /> : <FaChevronRight color="#666" />}
               </IconButton>
             )}
-          </ListItem>
-          {isFolder && (
-            <Collapse in={isOpen} timeout="auto" unmountOnExit>
-              <List component="div" disablePadding>
-                {renderFileTree(item.children || [], level + 1)}
-              </List>
-            </Collapse>
-          )}
-        </React.Fragment>
-      );
-    });
+            {item.type === 'folder' ? (
+              isExpanded ? 
+                <FaFolderOpen style={{ color: colors.folderOpen }} /> : 
+                <FaFolder style={{ color: colors.folder }} />
+            ) : (
+              <FaFile style={{ color: colors.file }} />
+            )}
+            <span>{item.name}</span>
+          </TreeItemContent>
+          <TreeItemActions className="actions">
+            {item.type === 'folder' && (
+              <Tooltip title="Add Item">
+                <IconButton 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCreateClick('file', item);
+                  }}
+                >
+                  <FaPlus style={{ color: colors.add }} />
+                </IconButton>
+              </Tooltip>
+            )}
+            <Tooltip title="Delete">
+              <IconButton 
+                onClick={(e) => handleDeleteClick(item, e)}
+              >
+                <FaTrash style={{ color: colors.delete }} />
+              </IconButton>
+            </Tooltip>
+          </TreeItemActions>
+        </TreeItem>
+
+        {item.type === 'folder' && isExpanded && item.children && (
+          <div style={{ marginLeft: '20px' }}>
+            {item.children.map(child => renderTreeItem(child, depth + 1))}
+          </div>
+        )}
+      </React.Fragment>
+    );
   };
 
   return (
@@ -335,17 +324,17 @@ const FileExplorer = () => {
         <Title>Files</Title>
         <ButtonGroup>
           <IconButton onClick={() => handleCreateClick('file')} title="New File">
-            <FaPlus />
+            <FaPlus style={{ color: colors.add }} />
           </IconButton>
           <IconButton onClick={() => handleCreateClick('folder')} title="New Folder">
-            <FaFolderPlus />
+            <FaFolderPlus style={{ color: colors.folder }} />
           </IconButton>
         </ButtonGroup>
       </FileExplorerHeader>
 
-      <List component="nav">
-        {renderFileTree(files)}
-      </List>
+      <div>
+        {files.map(item => renderTreeItem(item))}
+      </div>
 
       <Dialog open={openDialog} onClose={handleDialogClose}>
         <DialogTitle>
@@ -368,6 +357,55 @@ const FileExplorer = () => {
           <Button onClick={handleDialogClose}>Cancel</Button>
           <Button onClick={handleItemCreate} variant="contained" color="primary">
             Create
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+        PaperProps={{
+          style: {
+            minWidth: '400px'
+          }
+        }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          Confirm Deletion
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 1 }}>
+            {itemToDelete && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {itemToDelete.type === 'folder' ? (
+                  <FaFolder style={{ color: colors.folder }} />
+                ) : (
+                  <FaFile style={{ color: colors.file }} />
+                )}
+                <span>
+                  Are you sure you want to delete{' '}
+                  <strong>{itemToDelete.name}</strong>
+                  {itemToDelete.type === 'folder' ? ' and all its contents' : ''}?
+                </span>
+              </div>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDeleteCancel}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleDeleteConfirm} 
+            variant="contained" 
+            sx={{ 
+              bgcolor: colors.delete,
+              '&:hover': {
+                bgcolor: '#ff7875'
+              }
+            }}
+          >
+            Delete
           </Button>
         </DialogActions>
       </Dialog>
