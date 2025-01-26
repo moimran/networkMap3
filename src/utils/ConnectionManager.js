@@ -408,6 +408,29 @@ class ConnectionManager {
 
         return node.endpoints.filter(endpoint => this.isEndpointAvailable(endpoint));
     }
+
+    /**
+     * Remove a node from the topology
+     * @param {string} nodeId - ID of the node to remove
+     */
+    removeNode(nodeId) {
+        // Remove all connections associated with this node
+        Object.keys(this.topology.connections).forEach(connectionKey => {
+            const connection = this.topology.connections[connectionKey];
+            if (connection.sourceNodeId === nodeId || connection.targetNodeId === nodeId) {
+                delete this.topology.connections[connectionKey];
+            }
+        });
+
+        // Remove the node from topology
+        delete this.topology.nodes[nodeId];
+
+        // Log the node removal
+        Logger.info('Node Removed from Topology', { 
+            nodeId, 
+            remainingNodes: Object.keys(this.topology.nodes).length 
+        });
+    }
 }
 
 // Export a singleton instance

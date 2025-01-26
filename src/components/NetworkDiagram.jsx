@@ -17,6 +17,15 @@ import {
 import ConnectionManager from '../utils/ConnectionManager';
 import toast from '../utils/toast'; 
 import NodeConfigModal from './NodeConfigModal';
+import { 
+    Menu, 
+    MenuItem, 
+    ListItemIcon, 
+    ListItemText, 
+    Typography, 
+    Divider 
+} from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 // Singleton jsPlumb instance management
 const JsPlumbSingleton = (() => {
@@ -130,53 +139,20 @@ const NetworkDiagram = () => {
      * @param {Event} e - Context menu event
      * @param {Object} node - Node being right-clicked
      */
-    const handleContextMenu = useCallback((e, node) => {
-        // Prevent default context menu
-        e.preventDefault();
+    const handleContextMenu = useCallback((event, node) => {
+        event.preventDefault();
         
-        // Determine available endpoints based on connection stage
-        let availableEndpoints = node.endpoints;
+        // Ensure we have valid mouse coordinates
+        const mouseX = event.clientX > 0 ? event.clientX : 0;
+        const mouseY = event.clientY > 0 ? event.clientY : 0;
 
-        // If a source endpoint is already selected, filter endpoints
-        if (connectionState.stage === 'SOURCE_SELECTED') {
-            // Filter endpoints to match the type of the source endpoint
-            availableEndpoints = node.endpoints.filter(
-                endpoint => 
-                    endpoint.type === connectionState.sourceEndpoint.type && 
-                    ConnectionManager.isEndpointAvailable(endpoint)
-            );
-        } else {
-            // In IDLE state, show only available endpoints
-            availableEndpoints = node.endpoints.filter(
-                endpoint => ConnectionManager.isEndpointAvailable(endpoint)
-            );
-        }
-
-        // Prevent showing context menu if no endpoints are available
-        if (availableEndpoints.length === 0) {
-            Logger.info('No Available Endpoints', {
-                nodeId: node.id,
-                nodeName: node.name,
-                totalEndpoints: node.endpoints.length
-            });
-            return;
-        }
-
-        // Set context menu state
         setContextMenu({
-            x: e.clientX,
-            y: e.clientY,
+            mouseX,
+            mouseY,
             node: node,
-            endpoints: availableEndpoints
+            endpoints: node.endpoints || []
         });
-
-        Logger.info('Context Menu Opened', {
-            nodeId: node.id,
-            nodeName: node.name,
-            totalEndpoints: node.endpoints.length,
-            availableEndpoints: availableEndpoints.length
-        });
-    }, [connectionState.stage]);
+    }, []);
 
     /**
      * Create safe overlay configuration for connection
@@ -284,31 +260,157 @@ const NetworkDiagram = () => {
         }
     }, []);
 
-    /**
-     * Render all existing connections in the topology
-     */
-    const renderExistingConnections = useCallback(() => {
+    const renderExistingConnections = useCallback(async (loadedDiagram) => {
+        // Get existing connections from ConnectionManager
+        const existingConnections = Object.values(ConnectionManager.topology.connections || {});
+        
+        // Early return if no connections exist
+        if (!existingConnections || existingConnections.length === 0) {
+            Logger.info('No existing connections to render', {
+                connectionCount: 0,
+                diagramName: loadedDiagram?.name || 'Unnamed Diagram'
+            });
+            return;
+        }
+
+        Logger.info('Rendering Existing Connections', {
+            connectionCount: existingConnections.length,
+            diagramName: loadedDiagram?.name || 'Unnamed Diagram'
+        });
+
         try {
-            // Get existing connections from ConnectionManager
-            const existingConnections = Object.values(ConnectionManager.topology.connections);
+            // Iterate through existing connections
+            for (const connection of existingConnections) {
+                // Ensure source and target nodes exist
+                const sourceNode = document.getElementById(connection.sourceNodeId);
+                const targetNode = document.getElementById(connection.targetNodeId);
 
-            // Log existing connections
-            Logger.info('Rendering Existing Connections', {
-                connectionCount: existingConnections.length
-            });
+                if (!sourceNode || !targetNode) {
+                    Logger.warn('Skipping connection due to missing nodes', {
+                        sourceNodeId: connection.sourceNodeId,
+                        targetNodeId: connection.targetNodeId
+                    });
+                    continue;
+                }
 
-            // Render each connection
-            existingConnections.forEach(connection => {
-                renderConnection(connection);
-            });
+                // Create connection using jsPlumb
+                if (jsPlumbInstance.current) {
+                    jsPlumbInstance.current.connect({
+                        source: sourceNode,
+                        target: targetNode,
+                        type: connection.type || 'basic'
+                    });
+                }
+            }
         } catch (error) {
-            // Log any rendering errors
-            Logger.error('Existing Connections Rendering Error', {
+            Logger.error('Error rendering existing connections', {
                 error: error.message,
                 stack: error.stack
             });
         }
-    }, [renderConnection]);
+    }, []);
+
+    /**
+     * Delete a node and its related connections
+     * @param {string} nodeId - ID of the node to delete
+     */
+    const deleteNode = useCallback((nodeId) => {
+        // Find the node to be deleted
+        const nodeToDelete = nodes.find(node => node.id === nodeId);
+        
+        if (!nodeToDelete) {
+            Logger.warn('Attempted to delete non-existent node', { nodeId });
+            return;
+        }
+
+        // Remove all connections related to this node
+        const relatedConnections = Object.values(ConnectionManager.topology.connections)
+            .filter(conn => 
+                conn.sourceNodeId === nodeId || 
+                conn.targetNodeId === nodeId
+            );
+
+        // Remove connections from jsPlumb
+        relatedConnections.forEach(connection => {
+            try {
+                // Remove connection from jsPlumb if instance exists
+                if (jsPlumbInstance.current) {
+                    const jsPlumbConnection = jsPlumbInstance.current.getConnections()
+                        .find(conn => 
+                            (conn.sourceId === connection.sourceNodeId && 
+                             conn.targetId === connection.targetNodeId) ||
+                            (conn.sourceId === connection.targetNodeId && 
+                             conn.targetId === connection.sourceNodeId)
+                        );
+                    
+                    if (jsPlumbConnection) {
+                        jsPlumbInstance.current.deleteConnection(jsPlumbConnection);
+                    }
+                }
+
+                // Remove connection from ConnectionManager
+                ConnectionManager.removeConnection(
+                    ConnectionManager.generateConnectionKey(
+                        { nodeId: connection.sourceNodeId },
+                        { nodeId: connection.targetNodeId }
+                    )
+                );
+            } catch (error) {
+                Logger.error('Error removing connection during node deletion', {
+                    nodeId,
+                    connectionId: connection.id,
+                    error: error.message
+                });
+            }
+        });
+
+        // Remove node from jsPlumb
+        if (jsPlumbInstance.current) {
+            const nodeElement = document.getElementById(nodeId);
+            if (nodeElement) {
+                // Remove all endpoints associated with the node
+                jsPlumbInstance.current.removeAllEndpoints(nodeElement);
+            }
+        }
+
+        // Remove node from ConnectionManager
+        ConnectionManager.removeNode(nodeId);
+
+        // Remove node from local state
+        setNodes(prevNodes => prevNodes.filter(node => node.id !== nodeId));
+
+        // Remove node reference from nodesRef
+        delete nodesRef.current[nodeId];
+
+        // Log deletion
+        Logger.info('Node Deleted', {
+            nodeId,
+            nodeType: nodeToDelete.type,
+            relatedConnectionsCount: relatedConnections.length
+        });
+
+        // Optional: Show a toast notification
+        toast.info(`Node ${nodeToDelete.name} deleted`);
+    }, [nodes]);
+
+    // Add keyboard event listener for node deletion
+    useEffect(() => {
+        const handleKeyDown = (event) => {
+            // Delete or Backspace key to remove selected node
+            if ((event.key === 'Delete' || event.key === 'Backspace') && contextMenu) {
+                deleteNode(contextMenu.node.id);
+                setContextMenu(null);
+            }
+        };
+
+        // Add event listener
+        window.addEventListener('keydown', handleKeyDown);
+
+        // Cleanup
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [deleteNode, contextMenu]);
 
     /**
      * Handle endpoint selection for connection creation
@@ -505,7 +607,7 @@ const NetworkDiagram = () => {
 
         // Render existing connections after a short delay to ensure DOM is ready
         const renderTimer = setTimeout(() => {
-            renderExistingConnections();
+            renderExistingConnections(ConnectionManager.topology);
         }, 100);
 
         // Cleanup function
@@ -618,6 +720,73 @@ const NetworkDiagram = () => {
         }
     }, [createMultipleNodes, nodeConfigModal]);
 
+    const renderContextMenu = useMemo(() => {
+        if (!contextMenu) return null;
+
+        return (
+            <Menu
+                open={!!contextMenu}
+                onClose={() => setContextMenu(null)}
+                anchorReference="anchorPosition"
+                anchorPosition={
+                    contextMenu 
+                        ? { 
+                            top: contextMenu.mouseY, 
+                            left: contextMenu.mouseX 
+                        }
+                        : undefined
+                }
+                PaperProps={{
+                    style: {
+                        maxHeight: 300,
+                        width: '250px',
+                    }
+                }}
+            >
+                {/* Endpoint Selection Section */}
+                <MenuItem disabled>
+                    <Typography variant="subtitle2">
+                        {connectionState.stage === 'SOURCE_SELECTED' 
+                            ? 'Select Destination Endpoint' 
+                            : 'Select Source Endpoint'}
+                    </Typography>
+                </MenuItem>
+                {contextMenu.endpoints.map((endpoint, index) => (
+                    <MenuItem 
+                        key={`${endpoint.name}-${index}`}
+                        onClick={() => handleEndpointSelection(contextMenu.node, endpoint)}
+                    >
+                        {endpoint.name} ({endpoint.type})
+                    </MenuItem>
+                ))}
+
+                {/* Delete Node Option */}
+                <Divider />
+                <MenuItem 
+                    onClick={() => {
+                        deleteNode(contextMenu.node.id);
+                        setContextMenu(null);
+                    }}
+                    sx={{
+                        color: 'error.main',
+                        '&:hover': {
+                            backgroundColor: 'error.light',
+                            color: 'error.contrastText'
+                        }
+                    }}
+                >
+                    <ListItemIcon>
+                        <DeleteIcon color="error" />
+                    </ListItemIcon>
+                    <ListItemText 
+                        primary="Delete Node" 
+                        primaryTypographyProps={{color: 'error'}} 
+                    />
+                </MenuItem>
+            </Menu>
+        );
+    }, [contextMenu, connectionState, deleteNode, handleEndpointSelection]);
+
     // Render network diagram
     return (
         <div 
@@ -652,40 +821,7 @@ const NetworkDiagram = () => {
             ))}
 
             {/* Context Menu for Endpoint Selection */}
-            {contextMenu && (
-                <div 
-                    className="context-menu"
-                    style={{
-                        position: 'fixed',
-                        top: contextMenu.y,
-                        left: contextMenu.x,
-                        zIndex: 1000,
-                        backgroundColor: 'white',
-                        border: '1px solid #ccc',
-                        borderRadius: '4px',
-                        padding: '10px'
-                    }}
-                >
-                    <h4>
-                        {connectionState.stage === 'SOURCE_SELECTED' 
-                            ? 'Select Destination Endpoint' 
-                            : 'Select Source Endpoint'}
-                    </h4>
-                    {contextMenu.endpoints.map((endpoint, index) => (
-                        <div 
-                            key={`${endpoint.name}-${index}`}
-                            onClick={() => handleEndpointSelection(contextMenu.node, endpoint)}
-                            style={{
-                                cursor: 'pointer',
-                                padding: '5px',
-                                borderBottom: '1px solid #eee'
-                            }}
-                        >
-                            {endpoint.name} ({endpoint.type}) 
-                        </div>
-                    ))}
-                </div>
-            )}
+            {renderContextMenu}
 
             {/* Node Configuration Modal */}
             {nodeConfigModal && (
