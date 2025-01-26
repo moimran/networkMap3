@@ -134,6 +134,50 @@ const IconMenu = () => {
         e.dataTransfer.setData('iconPath', `/net_icons/${iconPath}`);
     };
 
+    const DEVICE_ICONS = [
+        { 
+            type: 'router', 
+            icons: [
+                '/net_icons/Router-2D-Gen-Dark-S.svg',
+                '/net_icons/Router-2D-Gen-Grey-S.svg',
+                '/net_icons/Router-2D-Gen-White-S.svg',
+                '/net_icons/Router-2D-FW-S.svg'
+            ]
+        },
+        { 
+            type: 'switch', 
+            icons: [
+                '/net_icons/Switch-2D-L2-Generic-S.svg',
+                '/net_icons/Switch-2D-L3-Generic-S.svg',
+                '/net_icons/Switch-2D-Cat9k-Blue-S.svg',
+                '/net_icons/Switch-2D-DC-NX-Blue-S.svg'
+            ]
+        },
+        { 
+            type: 'server', 
+            icons: [
+                '/net_icons/Server-2D-Generic-S.svg',
+                '/net_icons/Server-2D-Linux-S.svg',
+                '/net_icons/Server-2D-DNS-S.svg',
+                '/net_icons/Server-2D-LDAP-S.svg'
+            ]
+        },
+        { 
+            type: 'cloud', 
+            icons: [
+                '/net_icons/Cloud-2D-Blue-S.svg',
+                '/net_icons/Cloud-2D-Green-S.svg',
+                '/net_icons/Cloud-2D-Grey-S.svg',
+                '/net_icons/Cloud-2D-White-S.svg'
+            ]
+        }
+    ];
+
+    const handleDragStartDevice = (e, deviceType, iconPath) => {
+        e.dataTransfer.setData('nodeType', deviceType);
+        e.dataTransfer.setData('iconPath', iconPath);
+    };
+
     return (
         <Box 
             sx={{ 
@@ -278,6 +322,23 @@ const IconMenu = () => {
                             <Divider />
                         )}
                     </React.Fragment>
+                ))}
+                {DEVICE_ICONS.map((deviceGroup) => (
+                    <div key={deviceGroup.type} className="device-group">
+                        <h3>{deviceGroup.type.charAt(0).toUpperCase() + deviceGroup.type.slice(1)}</h3>
+                        <div className="icon-container">
+                            {deviceGroup.icons.map((iconPath, index) => (
+                                <img 
+                                    key={`${deviceGroup.type}-${index}`}
+                                    src={iconPath} 
+                                    alt={`${deviceGroup.type} icon`}
+                                    draggable={true}
+                                    onDragStart={(e) => handleDragStartDevice(e, deviceGroup.type, iconPath)}
+                                    className="device-icon"
+                                />
+                            ))}
+                        </div>
+                    </div>
                 ))}
             </Box>
         </Box>
