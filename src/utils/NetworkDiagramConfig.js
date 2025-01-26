@@ -1,8 +1,10 @@
+import Logger from './Logger';
+
 /**
  * Centralized Configuration for Network Diagram
  * Designed to be easily adaptable to different libraries and requirements
  */
-export const NETWORK_DIAGRAM_CONFIG = {
+const NETWORK_DIAGRAM_CONFIG = {
     // Grid Configuration
     GRID: {
         SIZE: 20,
@@ -63,41 +65,25 @@ export const NETWORK_DIAGRAM_CONFIG = {
 };
 
 /**
- * Performance and Logging Utility
- * Provides standardized logging across the application
+ * UUID Generation Utility
+ * Provides a robust way to generate unique identifiers
  */
-export const PerformanceLogger = {
-    /**
-     * Log informational messages
-     * @param {string} action - Action being performed
-     * @param {Object} details - Additional details about the action
-     */
-    log: (action, details = {}) => {
-        console.log(`[NetworkDiagram] ${action}`, {
-            timestamp: new Date().toISOString(),
-            ...details
-        });
-    },
-
-    /**
-     * Log error messages
-     * @param {string} action - Action that failed
-     * @param {Error} error - Error object
-     */
-    error: (action, error) => {
-        console.error(`[NetworkDiagram] ${action}`, {
-            timestamp: new Date().toISOString(),
-            errorMessage: error.message,
-            errorStack: error.stack
-        });
-    }
+const makeId = () => {
+    const timestamp = new Date().getTime();
+    const randomPart = Math.floor(Math.random() * 1000000);
+    return `${timestamp}-${randomPart}`;
 };
+
+/**
+ * Deprecated: Keep for backwards compatibility
+ */
+const generateUUID = makeId;
 
 /**
  * Endpoint Configuration Loader
  * Dynamically loads device-specific endpoint configurations
  */
-export const EndpointConfigLoader = {
+const EndpointConfigLoader = {
     /**
      * Load endpoint configurations for a specific device type
      * @param {string} iconPath - Path to the device icon
@@ -117,7 +103,7 @@ export const EndpointConfigLoader = {
             
             if (!response.ok) {
                 // Log detailed error for failed endpoint configuration fetch
-                PerformanceLogger.error('Endpoint Configuration Fetch Failed', {
+                Logger.error('Endpoint Configuration Fetch Failed', {
                     iconPath,
                     deviceType,
                     status: response.status,
@@ -129,16 +115,16 @@ export const EndpointConfigLoader = {
             const endpointConfig = await response.json();
 
             // Log successful endpoint configuration load
-            PerformanceLogger.log('Endpoint Configuration Loaded', {
+            Logger.info('Endpoint Configuration Loaded', {
                 deviceType,
                 iconPath,
-                endpointCount: endpointConfig?.endpoints?.length || 0
+                endpointCount: endpointConfig?.interfaces?.length || 0
             });
 
             return endpointConfig;
         } catch (error) {
             // Comprehensive error logging
-            PerformanceLogger.error('Endpoint Configuration Load Error', {
+            Logger.error('Endpoint Configuration Load Error', {
                 iconPath,
                 errorMessage: error.message,
                 errorStack: error.stack
@@ -146,4 +132,12 @@ export const EndpointConfigLoader = {
             return null;
         }
     }
+};
+
+export {
+    Logger,
+    NETWORK_DIAGRAM_CONFIG,
+    makeId,
+    generateUUID,
+    EndpointConfigLoader
 };

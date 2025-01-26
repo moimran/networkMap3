@@ -10,10 +10,12 @@ import '../styles/NetworkDiagram.css';
 // Import utility modules
 import { 
     NETWORK_DIAGRAM_CONFIG, 
-    PerformanceLogger, 
-    EndpointConfigLoader 
+    Logger, 
+    EndpointConfigLoader,
+    generateUUID  
 } from '../utils/NetworkDiagramConfig';
 import ConnectionManager from '../utils/ConnectionManager';
+import toast from '../utils/toast'; 
 
 // Singleton jsPlumb instance management
 const JsPlumbSingleton = (() => {
@@ -41,13 +43,15 @@ const JsPlumbSingleton = (() => {
 
                 // Bind connection events for logging
                 instance.bind('connection', (info) => {
-                    PerformanceLogger.log('jsPlumb Connection Event', {
+                    Logger.info('jsPlumb Connection Event', {
                         sourceId: info.sourceId,
-                        targetId: info.targetId
+                        targetId: info.targetId,
+                        sourceNode: info.source?.dataset?.nodeName,
+                        targetNode: info.target?.dataset?.nodeName
                     });
                 });
 
-                PerformanceLogger.log('JSPlumb Initialized', {
+                Logger.info('JSPlumb Initialized', {
                     gridSize: NETWORK_DIAGRAM_CONFIG.GRID.SIZE
                 });
             }
@@ -80,6 +84,23 @@ const NetworkDiagram = () => {
         sourceEndpoint: null,
         stage: 'IDLE' // IDLE, SOURCE_SELECTED
     });
+    const [deviceTypeCount, setDeviceTypeCount] = useState({});
+
+    // Create a memoized function to generate unique node names
+    const generateNodeName = useCallback((deviceType) => {
+        // Use functional state update to ensure correct incrementation
+        setDeviceTypeCount(prevCount => {
+            const updatedDeviceTypeCount = {...prevCount};
+            updatedDeviceTypeCount[deviceType] = (updatedDeviceTypeCount[deviceType] || 0) + 1;
+            return updatedDeviceTypeCount;
+        });
+
+        // Get the current count after update
+        const currentCount = (deviceTypeCount[deviceType] || 0) + 1;
+
+        // Generate the name: {device_type}-{n}
+        return `${deviceType}-${currentCount}`;
+    }, [deviceTypeCount]);
 
     /**
      * Create a new node with grid-aligned positioning
@@ -102,12 +123,21 @@ const NetworkDiagram = () => {
             .pop()                // Get the filename
             .replace(/\.(svg|png)$/, '');  // Remove .svg or .png extension
 
+        const nodeId = generateUUID();  // Generate unique node ID
+
         const newNode = {
-            id: `node-${Date.now()}`,
+            id: nodeId,
             type: deviceType,  // Use extracted device type
+            name: generateNodeName(deviceType),
             iconPath: iconPath,
             position: { x, y },
-            endpoints: endpointConfig?.interfaces || []
+            // Enhance endpoints with unique identifiers
+            endpoints: (endpointConfig?.interfaces || []).map(endpoint => ({
+                ...endpoint,
+                id: generateUUID(),  // Add unique ID to each endpoint
+                nodeId: nodeId,      // Link endpoint to its node
+                originalName: endpoint.name  // Preserve original name
+            }))
         };
 
         // Create node immediately
@@ -153,9 +183,12 @@ const NetworkDiagram = () => {
                 );
 
                 // Log registration result
-                PerformanceLogger.log('Node Registration', {
+                Logger.info('Node Registration', {
                     nodeId: newNode.id,
-                    registrationResult
+                    nodeName: newNode.name,
+                    nodeType: newNode.type,
+                    registrationResult,
+                    endpointCount: newNode.endpoints.length
                 });
 
                 // Store node reference
@@ -166,13 +199,68 @@ const NetworkDiagram = () => {
             }
         }, 0);
 
-        PerformanceLogger.log('Node Created', { 
+        Logger.info('Node Created', { 
             deviceType, 
+            nodeName: newNode.name,
             iconPath, 
-            position: newNode.position 
+            position: newNode.position,
+            endpointCount: newNode.endpoints.length
         });
         return newNode;
-    }, []);
+    }, [generateNodeName]);
+
+    /**
+     * Handle context menu for node endpoints
+     * @param {Event} e - Context menu event
+     * @param {Object} node - Node being right-clicked
+     */
+    const handleContextMenu = useCallback((e, node) => {
+        // Prevent default context menu
+        e.preventDefault();
+        
+        // Determine available endpoints based on connection stage
+        let availableEndpoints = node.endpoints;
+
+        // If a source endpoint is already selected, filter endpoints
+        if (connectionState.stage === 'SOURCE_SELECTED') {
+            // Filter endpoints to match the type of the source endpoint
+            availableEndpoints = node.endpoints.filter(
+                endpoint => 
+                    endpoint.type === connectionState.sourceEndpoint.type && 
+                    ConnectionManager.isEndpointAvailable(endpoint)
+            );
+        } else {
+            // In IDLE state, show only available endpoints
+            availableEndpoints = node.endpoints.filter(
+                endpoint => ConnectionManager.isEndpointAvailable(endpoint)
+            );
+        }
+
+        // Prevent showing context menu if no endpoints are available
+        if (availableEndpoints.length === 0) {
+            Logger.info('No Available Endpoints', {
+                nodeId: node.id,
+                nodeName: node.name,
+                totalEndpoints: node.endpoints.length
+            });
+            return;
+        }
+
+        // Set context menu state
+        setContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            node: node,
+            endpoints: availableEndpoints
+        });
+
+        Logger.info('Context Menu Opened', {
+            nodeId: node.id,
+            nodeName: node.name,
+            totalEndpoints: node.endpoints.length,
+            availableEndpoints: availableEndpoints.length
+        });
+    }, [connectionState.stage]);
 
     /**
      * Handle endpoint selection for connection creation
@@ -181,56 +269,127 @@ const NetworkDiagram = () => {
      */
     const handleEndpointSelection = useCallback((selectedNode, selectedEndpoint) => {
         // Debug logging for connection state
-        PerformanceLogger.log('Endpoint Selection', {
+        Logger.info('Endpoint Selection', {
             nodeId: selectedNode.id,
+            nodeName: selectedNode.name,
             endpointName: selectedEndpoint.name,
             currentStage: connectionState.stage
         });
 
-        switch (connectionState.stage) {
-            case 'IDLE':
-                // Start connection from source
-                setConnectionState({
-                    sourceNode: selectedNode,
-                    sourceEndpoint: selectedEndpoint,
-                    stage: 'SOURCE_SELECTED'
-                });
-                PerformanceLogger.log('Connection Source Selected', {
-                    nodeId: selectedNode.id,
-                    endpointName: selectedEndpoint.name
-                });
-                break;
+        try {
+            switch (connectionState.stage) {
+                case 'IDLE':
+                    // Check if endpoint is available
+                    if (ConnectionManager.isEndpointAvailable(selectedEndpoint)) {
+                        // Start connection from source
+                        setConnectionState({
+                            sourceNode: selectedNode,
+                            sourceEndpoint: selectedEndpoint,
+                            stage: 'SOURCE_SELECTED'
+                        });
+                    } else {
+                        // Notify user that endpoint is already in use
+                        Logger.info('Endpoint Already Used', {
+                            nodeId: selectedNode.id,
+                            nodeName: selectedNode.name,
+                            endpointName: selectedEndpoint.name
+                        });
+                        
+                        // Show warning about endpoint usage
+                        toast.warning(`Endpoint ${selectedEndpoint.name} has reached maximum connections`);
+                    }
+                    break;
 
-            case 'SOURCE_SELECTED':
-                // Complete connection
-                if (selectedNode.id !== connectionState.sourceNode.id) {
-                    const connectionType = selectedEndpoint.type === 'serial' 
-                        ? 'SERIAL' 
-                        : 'ETHERNET';
+                case 'SOURCE_SELECTED':
+                    // Prevent connecting to the same node
+                    if (selectedNode.id === connectionState.sourceNode.id) {
+                        Logger.info('Self Connection Prevented', {
+                            nodeId: selectedNode.id,
+                            nodeName: selectedNode.name
+                        });
+                        
+                        // Reset connection state
+                        setConnectionState({
+                            sourceNode: null,
+                            sourceEndpoint: null,
+                            stage: 'IDLE'
+                        });
+                        break;
+                    }
 
-                    // Attempt to create connection
-                    const connection = ConnectionManager.createConnection(
-                        connectionState.sourceNode, 
-                        selectedNode, 
-                        connectionType
-                    );
+                    // Validate endpoint type compatibility
+                    const isCompatibleEndpoint = 
+                        selectedEndpoint.type === connectionState.sourceEndpoint.type;
 
-                    // If connection is successful, use jsPlumb to visualize
-                    if (connection && jsPlumbInstance.current) {
-                        const sourceNodeData = nodesRef.current[connectionState.sourceNode.id];
-                        const targetNodeData = nodesRef.current[selectedNode.id];
+                    if (!isCompatibleEndpoint) {
+                        Logger.info('Incompatible Endpoint Types', {
+                            sourceType: connectionState.sourceEndpoint.type,
+                            targetType: selectedEndpoint.type,
+                            sourceNodeId: connectionState.sourceNode.id,
+                            sourceNodeName: connectionState.sourceNode.name,
+                            targetNodeId: selectedNode.id,
+                            targetNodeName: selectedNode.name
+                        });
+                        
+                        // Show error about incompatible endpoint types
+                        toast.error(`Cannot connect incompatible endpoint types: 
+                            ${connectionState.sourceEndpoint.type} to ${selectedEndpoint.type}`);
+                        
+                        // Reset connection state
+                        setConnectionState({
+                            sourceNode: null,
+                            sourceEndpoint: null,
+                            stage: 'IDLE'
+                        });
+                        break;
+                    }
 
-                        if (sourceNodeData && targetNodeData) {
-                            try {
-                                jsPlumbInstance.current.connect({
-                                    source: sourceNodeData.jsPlumbEndpoints[0],
-                                    target: targetNodeData.jsPlumbEndpoints[0],
-                                    ...NETWORK_DIAGRAM_CONFIG.CONNECTION_TYPES[connectionType]
-                                });
-                            } catch (error) {
-                                PerformanceLogger.error('jsPlumb Connection Visualization Failed', error);
+                    try {
+                        // Determine connection type based on endpoint type
+                        const connectionType = selectedEndpoint.type === 'serial' 
+                            ? 'SERIAL' 
+                            : 'ETHERNET';
+
+                        // Attempt to create connection
+                        const connection = ConnectionManager.createConnection(
+                            connectionState.sourceNode, 
+                            selectedNode, 
+                            connectionType,
+                            connectionState.sourceEndpoint,
+                            selectedEndpoint
+                        );
+
+                        // If connection is successful, use jsPlumb to visualize
+                        if (connection && jsPlumbInstance.current) {
+                            const sourceNodeData = nodesRef.current[connectionState.sourceNode.id];
+                            const targetNodeData = nodesRef.current[selectedNode.id];
+
+                            if (sourceNodeData && targetNodeData) {
+                                try {
+                                    jsPlumbInstance.current.connect({
+                                        source: sourceNodeData.jsPlumbEndpoints[0],
+                                        target: targetNodeData.jsPlumbEndpoints[0],
+                                        ...NETWORK_DIAGRAM_CONFIG.CONNECTION_TYPES[connectionType]
+                                    });
+
+                                    // Show success toast
+                                    toast.success(`Connected ${connectionState.sourceEndpoint.name} to ${selectedEndpoint.name}`);
+                                } catch (visualizationError) {
+                                    Logger.error('jsPlumb Connection Visualization Failed', visualizationError);
+                                    
+                                    // Rollback connection
+                                    ConnectionManager.removeConnection(connection.id);
+                                    
+                                    toast.error('Failed to visualize connection');
+                                }
                             }
                         }
+                    } catch (connectionError) {
+                        // Handle connection creation errors
+                        Logger.error('Connection Creation Failed', connectionError);
+                        
+                        // Show detailed error message
+                        toast.error(connectionError.message || 'Failed to create connection');
                     }
 
                     // Reset connection state
@@ -239,32 +398,30 @@ const NetworkDiagram = () => {
                         sourceEndpoint: null,
                         stage: 'IDLE'
                     });
-                }
-                break;
+                    break;
 
-            default:
-                break;
+                default:
+                    break;
+            }
+
+            // Close context menu
+            setContextMenu(null);
+        } catch (error) {
+            // Catch-all error handler
+            Logger.error('Endpoint Selection Error', error);
+            
+            // Reset connection state and close context menu
+            setConnectionState({
+                sourceNode: null,
+                sourceEndpoint: null,
+                stage: 'IDLE'
+            });
+            setContextMenu(null);
+            
+            // Show generic error toast
+            toast.error('An unexpected error occurred');
         }
-
-        // Close context menu
-        setContextMenu(null);
     }, [connectionState]);
-
-    /**
-     * Handle context menu for node
-     * @param {Event} e - Context menu event
-     * @param {Object} node - Node for which context menu is triggered
-     */
-    const handleContextMenu = useCallback((e, node) => {
-        e.preventDefault();
-        setContextMenu({
-            x: e.clientX,
-            y: e.clientY,
-            node: node,
-            endpoints: node.endpoints || [],
-            connectionStage: connectionState.stage
-        });
-    }, [connectionState.stage]);
 
     /**
      * Drag and drop event handlers
@@ -349,7 +506,7 @@ const NetworkDiagram = () => {
             className="network-diagram-container"
             onDragOver={handleDragOver}
             onDrop={handleDrop}
-            onClick={handleCanvasClick}  // Add click handler to container
+            onClick={handleCanvasClick}  
         >
             {/* Render Nodes */}
             {nodes.map(node => (
@@ -394,7 +551,11 @@ const NetworkDiagram = () => {
                         position: 'fixed',
                         top: contextMenu.y,
                         left: contextMenu.x,
-                        zIndex: 1000
+                        zIndex: 1000,
+                        backgroundColor: 'white',
+                        border: '1px solid #ccc',
+                        borderRadius: '4px',
+                        padding: '10px'
                     }}
                 >
                     <h4>
@@ -412,7 +573,7 @@ const NetworkDiagram = () => {
                                 borderBottom: '1px solid #eee'
                             }}
                         >
-                            {endpoint.name} ({endpoint.type})
+                            {endpoint.name} ({endpoint.type}) 
                         </div>
                     ))}
                 </div>
