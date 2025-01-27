@@ -2,10 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { 
     AppBar, 
     Toolbar as MuiToolbar, 
-    Box 
+    Box,
+    IconButton,
+    MenuItem,
+    Select,
+    Tooltip
 } from '@mui/material';
 import styled from 'styled-components';
 import ConnectionManager from '../utils/ConnectionManager';
+
+// Icons
+import SaveIcon from '@mui/icons-material/Save';
+import LoadIcon from '@mui/icons-material/CloudDownload';
+import UndoIcon from '@mui/icons-material/Undo';
+import RedoIcon from '@mui/icons-material/Redo';
+
+// Import theme constants
+import { CANVAS_THEMES } from '../constants/themes';
 
 const NetworkStatsContainer = styled.div`
     display: flex;
@@ -25,25 +38,32 @@ const StatLabel = styled.span`
     color: #666;
 `;
 
+const ThemeSelect = styled(Select)`
+    && {
+        margin-left: 10px;
+        min-width: 150px;
+    }
+`;
+
 /**
  * Toolbar Component for Network Diagram
  * Provides tools and settings for manipulating the diagram
  * 
  * @param {Object} props - Component props
- * @param {Function} props.onAddNode - Node addition handler
- * @param {Function} props.onAddConnection - Connection addition handler
  * @param {Function} props.onSaveDiagram - Diagram save handler
  * @param {Function} props.onLoadDiagram - Diagram load handler
  * @param {Function} props.onUndo - Undo handler
  * @param {Function} props.onRedo - Redo handler
+ * @param {string} props.currentTheme - Current theme ID
+ * @param {Function} props.onThemeChange - Theme change handler
  */
 const Toolbar = ({ 
-    onAddNode, 
-    onAddConnection, 
     onSaveDiagram, 
     onLoadDiagram,
     onUndo,
-    onRedo 
+    onRedo,
+    currentTheme,
+    onThemeChange
 }) => {
     // State to track network statistics
     const [networkStats, setNetworkStats] = useState({
@@ -97,6 +117,12 @@ const Toolbar = ({
         };
     }, []);
 
+    // Convert theme constants to menu items
+    const themeOptions = Object.values(CANVAS_THEMES).map(theme => ({
+        value: theme.id,
+        label: theme.name
+    }));
+
     return (
         <AppBar 
             position="static" 
@@ -105,13 +131,41 @@ const Toolbar = ({
         >
             <MuiToolbar variant="dense">
                 {/* Left side: Action buttons */}
-                <Box display="flex" gap={1}>
-                    <button onClick={onAddNode}>Add Node</button>
-                    <button onClick={onAddConnection}>Add Connection</button>
-                    <button onClick={onSaveDiagram}>Save</button>
-                    <button onClick={onLoadDiagram}>Load</button>
-                    <button onClick={onUndo}>Undo</button>
-                    <button onClick={onRedo}>Redo</button>
+                <Box display="flex" alignItems="center" gap={1}>
+                    <Tooltip title="Save Diagram">
+                        <IconButton onClick={onSaveDiagram} color="primary">
+                            <SaveIcon />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Load Diagram">
+                        <IconButton onClick={onLoadDiagram} color="primary">
+                            <LoadIcon />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Undo">
+                        <IconButton onClick={onUndo} color="primary">
+                            <UndoIcon />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Redo">
+                        <IconButton onClick={onRedo} color="primary">
+                            <RedoIcon />
+                        </IconButton>
+                    </Tooltip>
+
+                    {/* Theme Dropdown */}
+                    <ThemeSelect
+                        value={currentTheme}
+                        onChange={(e) => onThemeChange(e.target.value)}
+                        variant="outlined"
+                        size="small"
+                    >
+                        {themeOptions.map((theme) => (
+                            <MenuItem key={theme.value} value={theme.value}>
+                                {theme.label}
+                            </MenuItem>
+                        ))}
+                    </ThemeSelect>
                 </Box>
 
                 {/* Right side: Network Statistics */}
