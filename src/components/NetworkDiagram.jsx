@@ -854,4 +854,6 @@ const NetworkDiagram = ({ currentTheme }) => {
             </div>
         </div>
     );
-}
+};
+
+export default NetworkDiagram;

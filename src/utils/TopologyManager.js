@@ -85,7 +85,7 @@ class TopologyManager {
     validateConnection(sourceInterface, targetInterface) {
         // Validate input interfaces
         if (!sourceInterface || !targetInterface) {
-            Logger.warn('ConnectionManager: Connection Validation Failed', {
+            Logger.warn('TopologyManager: Connection Validation Failed', {
                 message: 'Source or target interface is undefined',
                 sourceInterface,
                 targetInterface
@@ -103,7 +103,7 @@ class TopologyManager {
 
         // Check source endpoint usage
         if (isEndpointInUse(sourceInterface.nodeId, sourceInterface.name)) {
-            Logger.warn('ConnectionManager: Connection Validation Failed', {
+            Logger.warn('TopologyManager: Connection Validation Failed', {
                 message: 'Source interface is already in use',
                 nodeId: sourceInterface.nodeId,
                 interface: sourceInterface.name
@@ -113,7 +113,7 @@ class TopologyManager {
 
         // Check target endpoint usage
         if (isEndpointInUse(targetInterface.nodeId, targetInterface.name)) {
-            Logger.warn('ConnectionManager: Connection Validation Failed', {
+            Logger.warn('TopologyManager: Connection Validation Failed', {
                 message: 'Target interface is already in use',
                 nodeId: targetInterface.nodeId,
                 interface: targetInterface.name
@@ -157,7 +157,7 @@ class TopologyManager {
         const targetType = extractInterfaceType(targetInterface);
 
         // Detailed logging for type identification
-        Logger.debug('ConnectionManager: Connection Type Identification', {
+        Logger.debug('TopologyManager: Connection Type Identification', {
             sourceInterface: {
                 name: sourceInterface.name,
                 originalType: sourceInterface.type,
@@ -172,7 +172,7 @@ class TopologyManager {
 
         // Validate types are present
         if (!sourceType || !targetType) {
-            Logger.warn('ConnectionManager: Connection Type Incompatibility', {
+            Logger.warn('TopologyManager: Connection Type Incompatibility', {
                 sourceType,
                 targetType,
                 message: 'Unable to determine interface types',
@@ -192,7 +192,7 @@ class TopologyManager {
         );
 
         if (!isTypeCompatible) {
-            Logger.warn('ConnectionManager: Connection Type Incompatibility', {
+            Logger.warn('TopologyManager: Connection Type Incompatibility', {
                 sourceType,
                 targetType,
                 allowedTypes,
@@ -209,7 +209,7 @@ class TopologyManager {
         
         // Check for existing connection with same specific endpoints
         if (this.topology.connections[connectionKey]) {
-            Logger.warn('ConnectionManager: Duplicate Connection Attempt', {
+            Logger.warn('TopologyManager: Duplicate Connection Attempt', {
                 sourceInterface: sourceInterface.name,
                 targetInterface: targetInterface.name,
                 message: 'This specific interface connection already exists'
@@ -244,7 +244,7 @@ class TopologyManager {
      */
     createConnection(sourceNode, targetNode, sourceInterface, targetInterface) {
         // Comprehensive logging for connection creation attempt
-        Logger.debug('ConnectionManager: Connection Creation Attempt', {
+        Logger.debug('TopologyManager: Connection Creation Attempt', {
             sourceNode: {
                 id: sourceNode.id,
                 name: sourceNode.name,
@@ -324,7 +324,7 @@ class TopologyManager {
         this.topology.connections[connectionId] = connection;
 
         // Log successful connection creation
-        Logger.debug('ConnectionManager: Connection Created Successfully', {
+        Logger.debug('TopologyManager: Connection Created Successfully', {
             connectionId,
             sourceNodeId: sourceNode.id,
             targetNodeId: targetNode.id,
@@ -382,7 +382,7 @@ class TopologyManager {
         
         if (result) {
             this.#emit('connectionAdded', result);
-            Logger.debug('ConnectionManager: Connection Added', {
+            Logger.debug('TopologyManager: Connection Added', {
                 connectionId: result.id,
                 totalConnections: Object.keys(this.topology.connections).length
             });
@@ -397,7 +397,7 @@ class TopologyManager {
      * @returns {Object|null} Removed node or null if not found
      */
     removeTopologyNode(nodeId) {
-        console.debug('ConnectionManager: Before node removal - Connections:', this.topology.connections);
+        console.debug('TopologyManager: Before node removal - Connections:', this.topology.connections);
         
         // Find and remove all connections associated with this node
         const connectionsToRemove = Object.entries(this.topology.connections)
@@ -407,7 +407,7 @@ class TopologyManager {
             );
 
         // Log connections being removed
-        Logger.debug('ConnectionManager: Removing connections for node', {
+        Logger.debug('TopologyManager: Removing connections for node', {
             nodeId,
             connectionsToRemove: connectionsToRemove.map(([key]) => key),
             connectionCount: connectionsToRemove.length
@@ -421,7 +421,7 @@ class TopologyManager {
             // Emit event for connection removal
             this.#emit('connectionRemoved', connection);
             
-            Logger.debug('ConnectionManager: Connection removed:', {
+            Logger.debug('TopologyManager: Connection removed:', {
                 connectionId: key,
                 remainingConnections: Object.keys(this.topology.connections).length
             });
@@ -431,13 +431,13 @@ class TopologyManager {
         const removedNode = this.topology.nodes[nodeId];
         delete this.topology.nodes[nodeId];
 
-        console.debug('ConnectionManager: After node removal - Connections:', {
+        console.debug('TopologyManager: After node removal - Connections:', {
             connections: this.topology.connections,
             connectionCount: Object.keys(this.topology.connections).length
         });
 
         // Log the node removal
-        Logger.debug('ConnectionManager: Node Removed from Topology', { 
+        Logger.debug('TopologyManager: Node Removed from Topology', { 
             nodeId, 
             remainingNodes: Object.keys(this.topology.nodes).length,
             remainingConnections: Object.keys(this.topology.connections).length,
@@ -464,7 +464,7 @@ class TopologyManager {
             delete this.topology.connections[connectionId];
             this.#emit('connectionRemoved', connection);
             
-            Logger.debug('ConnectionManager: Connection Removed', {
+            Logger.debug('TopologyManager: Connection Removed', {
                 connectionId,
                 remainingConnections: Object.keys(this.topology.connections).length
             });
@@ -484,7 +484,7 @@ class TopologyManager {
         this.topology.networks = {};
         this.topology.labinfo = {};
         
-        Logger.debug('ConnectionManager: Topology Reset');
+        Logger.debug('TopologyManager: Topology Reset');
     }
 
     /**
@@ -504,11 +504,11 @@ class TopologyManager {
     registerTopologyNode(nodeData, libraryNodeData = {}) {
         // Validate node data
         if (!nodeData) {
-            throw new Error('ConnectionManager: Cannot register undefined node');
+            throw new Error('TopologyManager: Cannot register undefined node');
         }
 
         if (!nodeData.id) {
-            throw new Error('ConnectionManager: Node must have an ID');
+            throw new Error('TopologyManager: Node must have an ID');
         }
 
         if (!nodeData.name) {
@@ -523,7 +523,7 @@ class TopologyManager {
         };
 
         // Log node registration
-        Logger.info('ConnectionManager: Node Registered', {
+        Logger.info('TopologyManager: Node Registered', {
             nodeId: nodeData.id,
             nodeName: nodeData.name,
             type: nodeData.type,
@@ -553,7 +553,7 @@ class TopologyManager {
     isEndpointAvailable(endpoint) {
         // Validate endpoint input
         if (!endpoint || !endpoint.nodeId) {
-            Logger.warn('ConnectionManager: Endpoint Availability Check Failed', {
+            Logger.warn('TopologyManager: Endpoint Availability Check Failed', {
                 message: 'Invalid or incomplete endpoint',
                 endpoint
             });
@@ -568,7 +568,7 @@ class TopologyManager {
             );
 
         // Log connection details for debugging
-        Logger.debug('ConnectionManager: Endpoint Availability Check', {
+        Logger.debug('TopologyManager: Endpoint Availability Check', {
             endpointName: endpoint.name,
             nodeId: endpoint.nodeId,
             existingConnectionCount: existingConnections.length,
@@ -592,7 +592,7 @@ class TopologyManager {
         const node = this.topology.nodes[nodeId];
         
         if (!node || !node.endpoints) {
-            Logger.warn('ConnectionManager: Available Endpoints Check Failed', {
+            Logger.warn('TopologyManager: Available Endpoints Check Failed', {
                 message: 'Node not found or has no endpoints',
                 nodeId
             });
@@ -611,7 +611,7 @@ class TopologyManager {
         const connections = this.getTopologyAllConnections();
         const endpoints = this.getTopologyEndpoints();
 
-        console.debug('ConnectionManager: Network Statistics:', {
+        console.debug('TopologyManager: Network Statistics:', {
             nodes,
             connections,
             endpoints,
@@ -640,7 +640,7 @@ class TopologyManager {
     getTopologyAllNodes() {
         // Get nodes directly from topology
         const nodes = Object.values(this.topology.nodes || {});
-        console.debug('ConnectionManager: Getting all nodes:', nodes);
+        console.debug('TopologyManager: Getting all nodes:', nodes);
         return nodes;
     }
 
@@ -650,7 +650,7 @@ class TopologyManager {
      */
     getTopologyAllConnections() {
         const connections = Object.values(this.topology.connections || {});
-        console.debug('ConnectionManager: Getting all connections:', {
+        console.debug('TopologyManager: Getting all connections:', {
             connections,
             count: connections.length,
             rawConnections: this.topology.connections
@@ -675,7 +675,7 @@ class TopologyManager {
             }
         });
 
-        console.debug('ConnectionManager: All endpoints:', endpoints);
+        console.debug('TopologyManager: All endpoints:', endpoints);
         return endpoints;
     }
 }
