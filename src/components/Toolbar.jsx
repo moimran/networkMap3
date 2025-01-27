@@ -9,16 +9,14 @@ import {
     Tooltip
 } from '@mui/material';
 import styled from 'styled-components';
-import ConnectionManager from '../utils/ConnectionManager';
-
-// Icons
 import SaveIcon from '@mui/icons-material/Save';
 import LoadIcon from '@mui/icons-material/CloudDownload';
 import UndoIcon from '@mui/icons-material/Undo';
 import RedoIcon from '@mui/icons-material/Redo';
-
+import TopologyManager from '../utils/TopologyManager'
 // Import theme constants
 import { CANVAS_THEMES } from '../constants/themes';
+import Logger from '../utils/Logger';
 
 const NetworkStatsContainer = styled.div`
     display: flex;
@@ -57,7 +55,7 @@ const ThemeSelect = styled(Select)`
  * @param {string} props.currentTheme - Current theme ID
  * @param {Function} props.onThemeChange - Theme change handler
  */
-const Toolbar = ({ 
+const Toolbar = ({
     onSaveDiagram, 
     onLoadDiagram,
     onUndo,
@@ -74,13 +72,13 @@ const Toolbar = ({
 
     // Update network statistics
     const updateNetworkStats = () => {
-        console.log('Attempting to update network stats...');
+        Logger.debug('Toolbar: Attempting to update network stats...');
         try {
-            const stats = ConnectionManager.getTopologyNetworkStatistics();
-            console.log('Retrieved network stats:', stats);
+            const stats = TopologyManager.getTopologyNetworkStatistics();
+            console.debug('Toolbar: Retrieved network stats:', stats);
             setNetworkStats(stats);
         } catch (error) {
-            console.error('Failed to update network stats:', error);
+            console.error('Toolbar: Failed to update network stats:', error);
             // Fallback to default stats
             setNetworkStats({
                 totalNodes: 0,
@@ -101,7 +99,7 @@ const Toolbar = ({
         };
 
         // Add event listeners
-        ConnectionManager
+        TopologyManager
             .on('connectionAdded', handleConnectionChange)
             .on('connectionRemoved', handleConnectionChange)
             .on('nodeAdded', handleConnectionChange)
@@ -109,7 +107,7 @@ const Toolbar = ({
 
         // Cleanup subscription
         return () => {
-            ConnectionManager
+            TopologyManager
                 .off('connectionAdded', handleConnectionChange)
                 .off('connectionRemoved', handleConnectionChange)
                 .off('nodeAdded', handleConnectionChange)

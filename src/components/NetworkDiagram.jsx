@@ -1,19 +1,13 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { 
-    ready, 
-    newInstance, 
-    BlankEndpoint, 
-    DotEndpoint 
-} from "@jsplumb/browser-ui";
+import { JsPlumbCoreWrapper } from './NetworkDiagram/JsPlumbWrapper';
 import '../styles/NetworkDiagram.css';
 import { CANVAS_THEMES } from '../constants/themes';
 import { 
-    NETWORK_DIAGRAM_CONFIG, 
-    Logger, 
+    NETWORK_DIAGRAM_CONFIG,
     EndpointConfigLoader,
     generateUUID  
 } from '../utils/NetworkDiagramConfig';
-import ConnectionManager from '../utils/ConnectionManager';
+import TopologyManager from '../utils/TopologyManager';
 import toast from '../utils/toast'; 
 import NodeConfigModal from './NodeConfigModal';
 import { 
@@ -25,69 +19,11 @@ import {
     Divider 
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import JsPlumbWrapper from './NetworkDiagram/JsPlumbWrapper';
+import Logger from '../utils/Logger';
 
-// Singleton jsPlumb instance management
-const JsPlumbSingleton = (() => {
-    let instance = null;
-    
-    return {
-        /**
-         * Get or create a jsPlumb instance
-         * @param {HTMLElement} container - Container element for jsPlumb
-         * @returns {Object} jsPlumb instance
-         */
-        getInstance: (container) => {
-            if (!instance) {
-                instance = newInstance({
-                    container: container,
-                    dragOptions: { 
-                        cursor: 'move', 
-                        grid: [
-                            NETWORK_DIAGRAM_CONFIG.GRID.SIZE, 
-                            NETWORK_DIAGRAM_CONFIG.GRID.SIZE
-                        ]
-                    },
-                    connectionType: 'basic'
-                });
-
-                // Bind connection events for logging
-                instance.bind('connection', (info) => {
-                    Logger.info('jsPlumb Connection Event', {
-                        sourceId: info.sourceId,
-                        targetId: info.targetId,
-                        sourceNode: info.source?.dataset?.nodeName,
-                        targetNode: info.target?.dataset?.nodeName
-                    });
-                });
-
-                Logger.info('JSPlumb Initialized', {
-                    gridSize: NETWORK_DIAGRAM_CONFIG.GRID.SIZE
-                });
-            }
-            return instance;
-        },
-
-        /**
-         * Destroy the jsPlumb instance
-         */
-        destroy: () => {
-            if (instance) {
-                instance.destroy();
-                instance = null;
-            }
-        }
-    };
-})();
-
-/**
- * NetworkDiagram Component
- * Renders an interactive network diagram with draggable nodes and connections
- * 
- * @param {Object} props
- * @param {string} props.currentTheme - Current theme ID for the canvas
- */
+// Refs and basic state
 const NetworkDiagram = ({ currentTheme }) => {
-    // Refs and basic state
     const containerRef = useRef(null);
     const jsPlumbInstance = useRef(null);
     const nodesRef = useRef({});
@@ -116,19 +52,19 @@ const NetworkDiagram = ({ currentTheme }) => {
     }), [activeTheme]);
 
     // Create a memoized function to generate unique node names
-    const generateNodeName = useCallback((deviceType) => {
-        // Use functional state update to ensure correct incrementation
-        setDeviceTypeCount(prevCount => {
-            const updatedDeviceTypeCount = {...prevCount};
-            updatedDeviceTypeCount[deviceType] = (updatedDeviceTypeCount[deviceType] || 0) + 1;
-            return updatedDeviceTypeCount;
-        });
-
-        // Get the current count after update
-        const currentCount = (deviceTypeCount[deviceType] || 0) + 1;
-
-        // Generate the name: {device_type}-{n}
-        return `${deviceType}-${currentCount}`;
+    const generateNodeName = useCallback((deviceType, index = undefined) => {
+        if (index !== undefined) {
+            // For batch creation, use the provided index
+            return `${deviceType}-${(deviceTypeCount[deviceType] || 0) + index + 1}`;
+        } else {
+            // For single node creation, increment the counter
+            const nextCount = (deviceTypeCount[deviceType] || 0) + 1;
+            setDeviceTypeCount(prevCount => ({
+                ...prevCount,
+                [deviceType]: nextCount
+            }));
+            return `${deviceType}-${nextCount}`;
+        }
     }, [deviceTypeCount]);
 
     /**
@@ -226,107 +162,124 @@ const NetworkDiagram = ({ currentTheme }) => {
                 return null;
             }
 
-            // Safely extract connection type
-            const connectionType = connection.sourceInterface?.type?.toLowerCase() === 'serial' 
-                ? 'SERIAL' 
-                : 'ETHERNET';
+            // Use JsPlumbWrapper to connect nodes
+            const jsPlumbConnection = JsPlumbWrapper.connectNodes(
+                sourceNodeElement, 
+                targetNodeElement, 
+                {
+                    interfaceType: connection.sourceInterface?.type,
+                    label: connection.label || '',
+                    // Additional connection details can be passed here
+                }
+            );
 
-            // Prepare connection configuration
-            const connectionConfig = {
-                source: sourceNodeElement,
-                target: targetNodeElement,
-                ...NETWORK_DIAGRAM_CONFIG.CONNECTION_TYPES[connectionType]
-            };
-
-            // Temporarily remove overlay configuration
-            // const overlays = createConnectionOverlay(connection);
-            // if (overlays) {
-            //     connectionConfig.overlays = overlays;
-            // }
-
-            // Create connection with comprehensive error handling
-            let jsPlumbConnection;
-            try {
-                jsPlumbConnection = jsPlumbInstance.current.connect(connectionConfig);
-            } catch (connectError) {
-                Logger.error('jsPlumb Connection Creation Failed', {
-                    errorMessage: connectError.message,
-                    errorStack: connectError.stack,
-                    connectionConfig: JSON.stringify(connectionConfig)
+            // Optional: Additional connection configuration or logging
+            if (jsPlumbConnection) {
+                Logger.debug('Connection Rendered Successfully', {
+                    sourceNodeId: connection.sourceNode.id,
+                    targetNodeId: connection.targetNode.id
                 });
-                return null;
             }
-
-            // Log successful connection rendering
-            Logger.info('Connection Rendered Successfully', {
-                connectionId: connection.id,
-                sourceNodeId: connection.sourceNode?.id,
-                targetNodeId: connection.targetNode?.id,
-                connectionType
-            });
 
             return jsPlumbConnection;
         } catch (error) {
-            // Comprehensive error logging
-            Logger.error('Comprehensive Connection Rendering Error', {
+            Logger.error('Connection Rendering Failed', {
                 errorMessage: error.message,
-                errorStack: error.stack,
-                connectionDetails: connection
+                connectionDetails: JSON.stringify(connection)
             });
-
             return null;
         }
     }, []);
 
-    const renderExistingConnections = useCallback(async (loadedDiagram) => {
-        // Get existing connections from ConnectionManager
-        const existingConnections = Object.values(ConnectionManager.topology.connections || {});
-        
-        // Early return if no connections exist
-        if (!existingConnections || existingConnections.length === 0) {
-            Logger.info('No existing connections to render', {
-                connectionCount: 0,
-                diagramName: loadedDiagram?.name || 'Unnamed Diagram'
+    /**
+     * Create node endpoints for a specific node
+     * @param {string} nodeId - ID of the node
+     * @param {Object} nodeConfig - Node configuration
+     * @returns {Array} Created endpoints
+     */
+    const createNodeEndpoints = useCallback((nodeId, nodeConfig) => {
+        const endpoints = [];
+
+        try {
+            // Create default endpoint using JsPlumbCoreWrapper
+            const defaultEndpoint = JsPlumbWrapper.createNodeEndpoint(nodeId, {
+                endpoint: JsPlumbCoreWrapper.createDotEndpoint({
+                    cssClass: 'node-endpoint'
+                }),
+                // Use node-specific configuration if available
+                ...nodeConfig?.endpointConfig,
+                // Additional default configurations
+                maxConnections: -1  // Allow multiple connections
             });
+
+            if (defaultEndpoint) {
+                endpoints.push(defaultEndpoint);
+            }
+
+            // Optional: Create additional specialized endpoints
+            if (nodeConfig?.interfaces) {
+                nodeConfig.interfaces.forEach(iface => {
+                    const interfaceEndpoint = JsPlumbWrapper.createNodeEndpoint(nodeId, {
+                        endpoint: JsPlumbCoreWrapper.createDotEndpoint({
+                            cssClass: `interface-endpoint-${iface.type}`
+                        }),
+                        anchor: JsPlumbCoreWrapper.getAnchorLocations().Continuous,
+                        interfaceType: iface.type
+                    });
+
+                    if (interfaceEndpoint) {
+                        endpoints.push(interfaceEndpoint);
+                    }
+                });
+            }
+
+            return endpoints;
+        } catch (error) {
+            Logger.error('Endpoint Creation Failed', {
+                nodeId,
+                errorMessage: error.message
+            });
+            return [];
+        }
+    }, []);
+
+    /**
+     * Render existing connections from topology
+     * @param {Object} topology - Network topology
+     */
+    const renderExistingConnections = useCallback((topology) => {
+        // Early return if topology or connections are invalid
+        if (!topology) {
+            Logger.warn('Topology is undefined or null');
             return;
         }
 
-        Logger.info('Rendering Existing Connections', {
-            connectionCount: existingConnections.length,
-            diagramName: loadedDiagram?.name || 'Unnamed Diagram'
+        // Normalize connections to an array
+        let connections = [];
+        if (Array.isArray(topology.connections)) {
+            connections = topology.connections;
+        } else if (topology.connections && typeof topology.connections === 'object') {
+            // Convert object to array if it's an object with numeric/string keys
+            connections = Object.values(topology.connections);
+        }
+
+        // Log connection rendering details
+        Logger.debug('Rendering Existing Connections', {
+            connectionCount: connections.length
         });
 
-        try {
-            // Iterate through existing connections
-            for (const connection of existingConnections) {
-                // Ensure source and target nodes exist
-                const sourceNode = document.getElementById(connection.sourceNodeId);
-                const targetNode = document.getElementById(connection.targetNodeId);
-
-                if (!sourceNode || !targetNode) {
-                    Logger.warn('Skipping connection due to missing nodes', {
-                        sourceNodeId: connection.sourceNodeId,
-                        targetNodeId: connection.targetNodeId
-                    });
-                    continue;
-                }
-
-                // Create connection using jsPlumb
-                if (jsPlumbInstance.current) {
-                    jsPlumbInstance.current.connect({
-                        source: sourceNode,
-                        target: targetNode,
-                        type: connection.type || 'basic'
-                    });
-                }
+        // Render each connection
+        connections.forEach(connection => {
+            try {
+                renderConnection(connection);
+            } catch (error) {
+                Logger.error('Failed to render individual connection', {
+                    connectionId: connection.id,
+                    errorMessage: error.message
+                });
             }
-        } catch (error) {
-            Logger.error('Error rendering existing connections', {
-                error: error.message,
-                stack: error.stack
-            });
-        }
-    }, []);
+        });
+    }, [renderConnection]);
 
     /**
      * Delete a node and its related connections
@@ -342,7 +295,7 @@ const NetworkDiagram = ({ currentTheme }) => {
         }
 
         // Remove all connections related to this node
-        const relatedConnections = Object.values(ConnectionManager.topology.connections)
+        const relatedConnections = Object.values(TopologyManager.topology.connections)
             .filter(conn => 
                 conn.sourceNodeId === nodeId || 
                 conn.targetNodeId === nodeId
@@ -367,8 +320,8 @@ const NetworkDiagram = ({ currentTheme }) => {
                 }
 
                 // Remove connection from ConnectionManager
-                ConnectionManager.removeConnectionTopology(
-                    ConnectionManager.generateConnectionKey(
+                TopologyManager.removeConnectionTopology(
+                    TopologyManager.generateConnectionKey(
                         { nodeId: connection.sourceNodeId },
                         { nodeId: connection.targetNodeId }
                     )
@@ -392,7 +345,7 @@ const NetworkDiagram = ({ currentTheme }) => {
         }
 
         // Remove node from ConnectionManager
-        ConnectionManager.removeTopologyNode(nodeId);
+        TopologyManager.removeTopologyNode(nodeId);
 
         // Remove node from local state
         setNodes(prevNodes => prevNodes.filter(node => node.id !== nodeId));
@@ -438,7 +391,7 @@ const NetworkDiagram = ({ currentTheme }) => {
     const handleEndpointSelection = useCallback((node, endpoint) => {
         try {
             // Comprehensive logging for endpoint selection
-            Logger.info('Detailed Endpoint Selection', {
+            Logger.debug('Detailed Endpoint Selection', {
                 nodeId: node.id,
                 nodeName: node.name,
                 endpoint: {
@@ -495,7 +448,7 @@ const NetworkDiagram = ({ currentTheme }) => {
                     });
 
                     // Attempt to create connection
-                    const connectionResult = ConnectionManager.createConnection(
+                    const connectionResult = TopologyManager.createConnection(
                         sourceNode, 
                         node, 
                         {
@@ -617,23 +570,25 @@ const NetworkDiagram = ({ currentTheme }) => {
      * Initialize diagram and render existing connections
      */
     useEffect(() => {
-        // Ensure container is available
-        if (!containerRef.current) return;
+        // Use JsPlumbCoreWrapper to ensure DOM readiness
+        JsPlumbCoreWrapper.ready(() => {
+            if (containerRef.current) {
+                // Initialize jsPlumb with the container
+                jsPlumbInstance.current = JsPlumbWrapper.initialize(containerRef.current);
 
-        // Use singleton to get or create jsPlumb instance
-        jsPlumbInstance.current = JsPlumbSingleton.getInstance(containerRef.current);
+                // Render existing connections after a short delay to ensure DOM is ready
+                const renderTimer = setTimeout(() => {
+                    renderExistingConnections(TopologyManager.topology);
+                }, 100);
 
-        // Render existing connections after a short delay to ensure DOM is ready
-        const renderTimer = setTimeout(() => {
-            renderExistingConnections(ConnectionManager.topology);
-        }, 100);
-
-        // Cleanup function
-        return () => {
-            clearTimeout(renderTimer);
-            JsPlumbSingleton.destroy();
-        };
-    }, [renderExistingConnections]); 
+                // Cleanup function
+                return () => {
+                    clearTimeout(renderTimer);
+                    JsPlumbWrapper.destroy();
+                };
+            }
+        });
+    }, [renderExistingConnections]);
 
     const createMultipleNodes = useCallback(async (nodeConfig, count) => {
         const { type, iconPath, x, y } = nodeConfig;
@@ -648,6 +603,13 @@ const NetworkDiagram = ({ currentTheme }) => {
             .pop()                // Get the filename
             .replace(/\.(svg|png)$/, '');  // Remove .svg or .png extension
 
+        // Update the device type count for all nodes at once
+        const currentCount = deviceTypeCount[deviceType] || 0;
+        setDeviceTypeCount(prevCount => ({
+            ...prevCount,
+            [deviceType]: currentCount + count
+        }));
+
         // Create multiple nodes in a grid-like sequence
         for (let i = 0; i < count; i++) {
             const nodeId = generateUUID();  // Generate unique node ID
@@ -657,20 +619,19 @@ const NetworkDiagram = ({ currentTheme }) => {
             const newNode = {
                 id: nodeId,
                 type: deviceType,
-                name: generateNodeName(deviceType),
+                name: generateNodeName(deviceType, i),  // Pass index for sequential naming
                 iconPath: iconPath,
                 position: { x: nodeX, y: nodeY },
-                // Enhance endpoints with unique identifiers
                 endpoints: (endpointConfig?.interfaces || []).map(endpoint => ({
                     ...endpoint,
-                    id: generateUUID(),  // Add unique ID to each endpoint
-                    nodeId: nodeId,      // Link endpoint to its node
-                    originalName: endpoint.name  // Preserve original name
+                    id: generateUUID(),
+                    nodeId: nodeId,
+                    originalName: endpoint.name
                 }))
             };
 
             // Add node to ConnectionManager topology first
-            ConnectionManager.addTopologyNode(newNode);
+            TopologyManager.addTopologyNode(newNode);
             nodes.push(newNode);
         }
 
@@ -694,7 +655,19 @@ const NetworkDiagram = ({ currentTheme }) => {
                             nodeElement, 
                             endpointOptions,
                             {
-                                endpoint: endpoint.type === 'ethernet' ? DotEndpoint : BlankEndpoint,
+                                endpoint: endpoint.type === 'ethernet' 
+                                    ? JsPlumbCoreWrapper.createDotEndpoint({
+                                        paintStyle: { 
+                                            fill: '#0066aa',
+                                            radius: 5 
+                                        }
+                                    }) 
+                                    : JsPlumbCoreWrapper.createBlankEndpoint({
+                                        paintStyle: { 
+                                            fill: '#ff6347',
+                                            radius: 5 
+                                        }
+                                    }),
                                 paintStyle: { 
                                     fill: endpoint.type === 'ethernet' ? '#0066aa' : '#ff6347',
                                     radius: 5 
@@ -712,7 +685,7 @@ const NetworkDiagram = ({ currentTheme }) => {
                     };
 
                     // Register node with ConnectionManager
-                    ConnectionManager.registerTopologyNode(
+                    TopologyManager.registerTopologyNode(
                         newNode,  // Actual node data
                         libraryNodeData  // Library-specific node representation
                     );
@@ -730,7 +703,7 @@ const NetworkDiagram = ({ currentTheme }) => {
             deviceType, 
             nodeCount: nodes.length,
             iconPath,
-            topology: ConnectionManager.topology
+            topology: TopologyManager.topology
         });
     }, [generateNodeName]);
 

@@ -11,7 +11,6 @@ import {
     Paper 
 } from '@mui/material';
 import PropTypes from 'prop-types';
-import ConnectionManager from '../utils/ConnectionManager';
 
 /**
  * Constants for node configuration

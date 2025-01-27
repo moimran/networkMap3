@@ -9,7 +9,7 @@ const GlobalTopology = {
     labinfo: {}
 };
 
-class ConnectionManager {
+class TopologyManager {
     // Event listeners
     constructor() {
         // Singleton global topology
@@ -31,8 +31,6 @@ class ConnectionManager {
                 'Ethernet': ['Ethernet']
             }
         };
-
-        console.log('ConnectionManager initialized with topology:', this.topology);
     }
 
     /**
@@ -359,7 +357,7 @@ class ConnectionManager {
      * @returns {Object|null} Added node or null if failed
      */
     addTopologyNode(node) {
-        console.log('Adding node:', node);
+        console.debug('Adding node:', node);
         if (!this.topology.nodes) {
             this.topology.nodes = {};
         }
@@ -613,7 +611,7 @@ class ConnectionManager {
         const connections = this.getTopologyAllConnections();
         const endpoints = this.getTopologyEndpoints();
 
-        console.info('ConnectionManager: Network Statistics:', {
+        console.debug('ConnectionManager: Network Statistics:', {
             nodes,
             connections,
             endpoints,
@@ -632,7 +630,7 @@ class ConnectionManager {
      * @returns {Object} Network statistics
      */
     static getNetworkStatistics() {
-        return new ConnectionManager().getTopologyNetworkStatistics();
+        return new TopologyManager().getTopologyNetworkStatistics();
     }
 
     /**
@@ -642,7 +640,7 @@ class ConnectionManager {
     getTopologyAllNodes() {
         // Get nodes directly from topology
         const nodes = Object.values(this.topology.nodes || {});
-        console.log('Getting all nodes:', nodes);
+        console.debug('ConnectionManager: Getting all nodes:', nodes);
         return nodes;
     }
 
@@ -652,7 +650,7 @@ class ConnectionManager {
      */
     getTopologyAllConnections() {
         const connections = Object.values(this.topology.connections || {});
-        console.log('Getting all connections:', {
+        console.debug('ConnectionManager: Getting all connections:', {
             connections,
             count: connections.length,
             rawConnections: this.topology.connections
@@ -677,10 +675,10 @@ class ConnectionManager {
             }
         });
 
-        console.log('All endpoints:', endpoints);
+        console.debug('ConnectionManager: All endpoints:', endpoints);
         return endpoints;
     }
 }
 
 // Export a singleton instance
-export default new ConnectionManager();
+export default new TopologyManager();
