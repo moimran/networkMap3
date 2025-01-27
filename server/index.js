@@ -15,6 +15,11 @@ const PATHS = {
   DEVICE_CONFIG: path.join(__dirname, '../public/deviceconfig')
 };
 
+// Constants for file extensions and types
+const FILE_EXTENSIONS = {
+  DIAGRAM: '.json'
+};
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -65,6 +70,26 @@ async function removeDir(dirPath) {
 }
 
 /**
+ * Helper function to handle file extensions consistently
+ * @param {string} fileName - Name of the file
+ * @param {string} extension - Extension to ensure
+ * @returns {string} Filename with proper extension
+ */
+function ensureFileExtension(fileName, extension) {
+  return fileName.endsWith(extension) ? fileName : `${fileName}${extension}`;
+}
+
+/**
+ * Helper function to remove file extension
+ * @param {string} fileName - Name of the file
+ * @param {string} extension - Extension to remove
+ * @returns {string} Filename without extension
+ */
+function removeFileExtension(fileName, extension) {
+  return fileName.endsWith(extension) ? fileName.slice(0, -extension.length) : fileName;
+}
+
+/**
  * Helper function to get files recursively
  * @param {string} dir - Directory to scan
  * @returns {Promise<Array>} Array of file and folder objects
@@ -86,9 +111,10 @@ async function getFilesRecursively(dir) {
         };
       }
       return {
-        name: item.name.replace('.json', ''),
+        // Remove .json extension from name for consistency
+        name: removeFileExtension(item.name, FILE_EXTENSIONS.DIAGRAM),
         type: 'file',
-        path: relativePath
+        path: removeFileExtension(relativePath, FILE_EXTENSIONS.DIAGRAM)
       };
     })
   );
@@ -171,7 +197,8 @@ app.post('/api/create-file', async (req, res) => {
       return res.status(400).json({ error: 'File name is required' });
     }
 
-    const fullPath = validatePath(path.join(filePath || '', `${name}.json`), PATHS.DIAGRAMS);
+    const fileName = ensureFileExtension(name, FILE_EXTENSIONS.DIAGRAM);
+    const fullPath = validatePath(path.join(filePath || '', fileName), PATHS.DIAGRAMS);
     await ensureDir(path.dirname(fullPath));
     await fs.writeFile(fullPath, JSON.stringify(content || {}, null, 2));
     res.json({ success: true });
@@ -189,12 +216,17 @@ app.delete('/api/delete-item', async (req, res) => {
       return res.status(400).json({ error: 'Path is required' });
     }
 
-    const fullPath = validatePath(itemPath, PATHS.DIAGRAMS);
+    const fullPath = validatePath(
+      type === 'file' 
+        ? ensureFileExtension(itemPath, FILE_EXTENSIONS.DIAGRAM)
+        : itemPath, 
+      PATHS.DIAGRAMS
+    );
     
     if (type === 'folder') {
       await removeDir(fullPath);
     } else {
-      await fs.unlink(fullPath + '.json');
+      await fs.unlink(fullPath);
     }
     
     res.json({ success: true });

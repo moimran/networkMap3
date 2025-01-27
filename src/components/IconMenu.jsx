@@ -12,115 +12,20 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { LAYOUT } from '../constants/layout';
+import { categorizeIcons, getNodeTypeFromIcon, getFullIconPath } from '../utils/IconUtils';
 
 /**
  * IconMenu Component
- * Displays network icons in categorized dropdown menus
+ * Dynamically categorizes and displays network icons from public/net_icons
  */
 const IconMenu = () => {
-    const [expanded, setExpanded] = useState('Routers'); // Default open category
-
-    // Icon categories and their patterns
-    const categories = {
-        'Routers': {
-            patterns: ['Router-2D-', 'Router2.png'],
-            description: 'Network routing devices',
-            icons: []
-        },
-        'Switches': {
-            patterns: ['Switch-2D-', 'Switch-3D-', 'Switch2.png', 'Switch L32.png'],
-            description: 'Network switching devices',
-            icons: []
-        },
-        'Servers': {
-            patterns: ['Server-2D-', 'Server_'],
-            description: 'Various server types',
-            icons: []
-        },
-        'End Devices': {
-            patterns: ['PC-2D-', 'Desktop2.png'],
-            description: 'End-user devices',
-            icons: []
-        },
-        'Network Clouds': {
-            patterns: ['Cloud-2D-', 'cloud'],
-            description: 'Network clouds and internet',
-            icons: []
-        },
-        'Network Points': {
-            patterns: ['Dot-2D-', 'Dot_'],
-            description: 'Network connection points',
-            icons: []
-        },
-        'Global Networks': {
-            patterns: ['Globe-2D-', 'globe'],
-            description: 'Global network icons',
-            icons: []
-        }
-    };
-
-    // Group icons by category
-    const [iconsByCategory, setIconsByCategory] = useState(categories);
+    const [expanded, setExpanded] = useState('Routers');
+    const [iconsByCategory, setIconsByCategory] = useState({});
 
     useEffect(() => {
-        // Function to check if an icon matches any pattern in a category
-        const matchesCategory = (iconName, patterns) => {
-            return patterns.some(pattern => 
-                iconName.toLowerCase().includes(pattern.toLowerCase())
-            );
-        };
-
-        // Load and categorize icons
-        const loadIcons = async () => {
-            try {
-                // List of all available icons
-                const allIcons = [
-                    // Routers
-                    'Router-2D-FW-S.svg', 'Router-2D-Gen-Dark-S.svg', 'Router-2D-Gen-Grey-S.svg',
-                    'Router-2D-Gen-White-S.svg', 'Router2.png',
-                    
-                    // Switches
-                    'Switch-2D-Cat9k-Blue-S.svg', 'Switch-2D-DC-NX-Blue-S.svg',
-                    'Switch-2D-L2-Generic-S.svg', 'Switch-2D-L3-Generic-S.svg',
-                    'Switch-3D-L2-S.svg', 'Switch-3D-L3-S.svg', 'Switch2.png', 'Switch L32.png',
-                    
-                    // Servers
-                    'Server-2D-DNS-S.svg', 'Server-2D-Generic-S.svg', 'Server-2D-LDAP-S.svg',
-                    'Server-2D-Linux-S.svg', 'Server-2D-SEC-S.svg', 'Server_WEB1.png', 'Server_file.png',
-                    
-                    // End Devices
-                    'PC-2D-Desktop-Docker-S.svg', 'PC-2D-Desktop-Generic-S.svg',
-                    'PC-2D-Desktop-Linux-S.svg', 'PC-2D-Desktop-Windows-S.svg', 'Desktop2.png',
-                    
-                    // Clouds
-                    'Cloud-2D-Blue-S.svg', 'Cloud-2D-Green-S.svg', 'Cloud-2D-Grey-S.svg',
-                    'Cloud-2D-White-S.svg', 'Cloud-2D-Yellow-S.svg', 'cloud.png', 'cloud_green.png',
-                    'cloud_sm.png', 'cloud_sm_green.png',
-                    
-                    // Network Points
-                    'Dot-2D-Black-S.svg', 'Dot-2D-Blue-S.svg', 'Dot-2D-Green-S.svg',
-                    'Dot_black.png', 'Dot_blue.png', 'Dot_green.png',
-                    
-                    // Global Networks
-                    'Globe-2D-Blue.svg', 'Globe-2D-Green.svg', 'Globe-2D-Grey.svg',
-                    'Globe-2D-Orange.svg', 'Globe-2D-Pink.svg', 'globe1.png', 'globe2.png'
-                ];
-
-                // Categorize icons
-                const categorized = { ...categories };
-                Object.entries(categorized).forEach(([category, data]) => {
-                    data.icons = allIcons.filter(icon => 
-                        matchesCategory(icon, data.patterns)
-                    );
-                });
-                
-                setIconsByCategory(categorized);
-            } catch (error) {
-                console.error('Error loading icons:', error);
-            }
-        };
-
-        loadIcons();
+        // Dynamically categorize icons
+        const categorized = categorizeIcons();
+        setIconsByCategory(categorized);
     }, []);
 
     const handleAccordionChange = (panel) => (event, isExpanded) => {
@@ -129,9 +34,9 @@ const IconMenu = () => {
 
     const handleDragStart = (e, iconPath) => {
         // Extract the base name without extension for the node type
-        const nodeType = iconPath.split('.')[0].toLowerCase();
+        const nodeType = getNodeTypeFromIcon(iconPath);
         e.dataTransfer.setData('nodeType', nodeType);
-        e.dataTransfer.setData('iconPath', `/net_icons/${iconPath}`);
+        e.dataTransfer.setData('iconPath', getFullIconPath(iconPath));
     };
 
     return (
@@ -239,7 +144,7 @@ const IconMenu = () => {
                                     {data.icons.map((icon) => (
                                         <Grid item xs={4} key={icon}>
                                             <Tooltip 
-                                                title={icon.split('.')[0]}
+                                                title={icon.split('.')[0].toLowerCase()}
                                                 placement="right"
                                             >
                                                 <Paper
@@ -259,7 +164,7 @@ const IconMenu = () => {
                                                     onDragStart={(e) => handleDragStart(e, icon)}
                                                 >
                                                     <img
-                                                        src={`/net_icons/${icon}`}
+                                                        src={`/net_icons/${icon.toLowerCase()}`}
                                                         alt={icon}
                                                         style={{
                                                             width: '32px',

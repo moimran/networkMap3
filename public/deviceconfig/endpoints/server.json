@@ -1,0 +1,29 @@
+{
+    "deviceType": "server",
+    "endpoints": [
+        {
+            "name": "eth0",
+            "type": "ethernet",
+            "speed": "1000 Mbps",
+            "status": "up"
+        },
+        {
+            "name": "eth1", 
+            "type": "ethernet",
+            "speed": "1000 Mbps", 
+            "status": "up"
+        },
+        {
+            "name": "mgmt0",
+            "type": "ethernet",
+            "speed": "100 Mbps",
+            "status": "up"
+        },
+        {
+            "name": "serial0", 
+            "type": "serial", 
+            "speed": "2 Mbps",
+            "status": "down"
+        }
+    ]
+}

@@ -1,0 +1,33 @@
+{
+    "deviceType": "router",
+    "endpoints": [
+        {
+            "name": "GigabitEthernet0/0",
+            "type": "ethernet",
+            "speed": "1000 Mbps",
+            "connectionType": "RJ45",
+            "status": "up"
+        },
+        {
+            "name": "GigabitEthernet0/1",
+            "type": "ethernet",
+            "speed": "1000 Mbps",
+            "connectionType": "RJ45",
+            "status": "up"
+        },
+        {
+            "name": "Serial0/0/0",
+            "type": "serial",
+            "speed": "2 Mbps",
+            "connectionType": "V.35",
+            "status": "up"
+        },
+        {
+            "name": "Serial0/0/1",
+            "type": "serial",
+            "speed": "2 Mbps",
+            "connectionType": "V.35",
+            "status": "down"
+        }
+    ]
+}
