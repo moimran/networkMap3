@@ -76,7 +76,7 @@ const Toolbar = ({
     const updateNetworkStats = () => {
         console.log('Attempting to update network stats...');
         try {
-            const stats = ConnectionManager.getNetworkStatistics();
+            const stats = ConnectionManager.getTopologyNetworkStatistics();
             console.log('Retrieved network stats:', stats);
             setNetworkStats(stats);
         } catch (error) {

@@ -367,7 +367,7 @@ const NetworkDiagram = ({ currentTheme }) => {
                 }
 
                 // Remove connection from ConnectionManager
-                ConnectionManager.removeConnection(
+                ConnectionManager.removeConnectionTopology(
                     ConnectionManager.generateConnectionKey(
                         { nodeId: connection.sourceNodeId },
                         { nodeId: connection.targetNodeId }
@@ -392,7 +392,7 @@ const NetworkDiagram = ({ currentTheme }) => {
         }
 
         // Remove node from ConnectionManager
-        ConnectionManager.removeNode(nodeId);
+        ConnectionManager.removeTopologyNode(nodeId);
 
         // Remove node from local state
         setNodes(prevNodes => prevNodes.filter(node => node.id !== nodeId));
@@ -670,7 +670,7 @@ const NetworkDiagram = ({ currentTheme }) => {
             };
 
             // Add node to ConnectionManager topology first
-            ConnectionManager.addNode(newNode);
+            ConnectionManager.addTopologyNode(newNode);
             nodes.push(newNode);
         }
 
@@ -712,7 +712,7 @@ const NetworkDiagram = ({ currentTheme }) => {
                     };
 
                     // Register node with ConnectionManager
-                    ConnectionManager.registerNode(
+                    ConnectionManager.registerTopologyNode(
                         newNode,  // Actual node data
                         libraryNodeData  // Library-specific node representation
                     );
