@@ -18,6 +18,7 @@ class Logger {
         level: 'info',
         enabled: true,
         consoleOutput: true,
+        debugMode: false,
         logHistory: [],
         maxLogHistory: 100
     };
@@ -48,7 +49,26 @@ class Logger {
         const currentPriority = levelPriorities[this.#config.level] || 0;
         const inputPriority = levelPriorities[level] || 0;
 
+        // Special handling for debug mode
+        if (level === this.LEVELS.DEBUG) {
+            return this.#config.enabled && 
+                   this.#config.debugMode && 
+                   inputPriority >= currentPriority;
+        }
+
         return this.#config.enabled && inputPriority >= currentPriority;
+    }
+
+    /**
+     * Format log message with level tag
+     * @param {string} level - Log level
+     * @param {string} message - Log message
+     * @returns {string} Formatted log message
+     */
+    static #formatMessage(level, message) {
+        const timestamp = new Date().toISOString();
+        const levelTag = `[${level.toUpperCase()}]`;
+        return `${timestamp} ${levelTag} ${message}`;
     }
 
     /**
@@ -80,10 +100,13 @@ class Logger {
         // Console output if enabled
         if (this.#config.consoleOutput) {
             const consoleMethod = console[level] || console.log;
-            consoleMethod(
-                `${logEntry.timestamp} [${level.toUpperCase()}]: ${message}`,
-                Object.keys(metadata).length ? metadata : ''
-            );
+            const formattedMessage = this.#formatMessage(level, message);
+            
+            if (Object.keys(metadata).length) {
+                consoleMethod(formattedMessage, metadata);
+            } else {
+                consoleMethod(formattedMessage);
+            }
         }
 
         // Maintain log history
