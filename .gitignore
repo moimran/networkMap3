@@ -38,4 +38,6 @@ dist-ssr
 .env.test.local
 .env.production.local
 
+logs
+
 reference

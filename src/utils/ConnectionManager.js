@@ -11,9 +11,19 @@ const GlobalTopology = {
 };
 
 class ConnectionManager {
+    // Event listeners
     constructor() {
         // Singleton global topology
         this.topology = GlobalTopology;
+        
+        // Ensure topology has required properties
+        if (!this.topology.nodes) {
+            console.log('Initializing nodes in topology');
+            this.topology.nodes = {};
+        }
+        
+        // Event listeners
+        this.eventListeners = {};
 
         // Connection rules based on interface types
         this.connectionRules = {
@@ -22,6 +32,51 @@ class ConnectionManager {
                 'Ethernet': ['Ethernet']
             }
         };
+
+        console.log('ConnectionManager initialized with topology:', this.topology);
+    }
+
+    /**
+     * Add an event listener
+     * @param {string} eventName - Name of the event
+     * @param {Function} callback - Callback function
+     */
+    on(eventName, callback) {
+        if (!this.eventListeners[eventName]) {
+            this.eventListeners[eventName] = [];
+        }
+        this.eventListeners[eventName].push(callback);
+        return this;
+    }
+
+    /**
+     * Remove an event listener
+     * @param {string} eventName - Name of the event
+     * @param {Function} callback - Callback function to remove
+     */
+    off(eventName, callback) {
+        if (this.eventListeners[eventName]) {
+            this.eventListeners[eventName] = 
+                this.eventListeners[eventName].filter(cb => cb !== callback);
+        }
+        return this;
+    }
+
+    /**
+     * Emit an event
+     * @param {string} eventName - Name of the event
+     * @param {*} data - Event data
+     */
+    #emit(eventName, data) {
+        if (this.eventListeners[eventName]) {
+            this.eventListeners[eventName].forEach(callback => {
+                try {
+                    callback(data);
+                } catch (error) {
+                    // Silent error handling
+                }
+            });
+        }
     }
 
     /**
@@ -37,6 +92,34 @@ class ConnectionManager {
                 message: 'Source or target interface is undefined',
                 sourceInterface,
                 targetInterface
+            });
+            return false;
+        }
+
+        // Check if either endpoint is already in use
+        const isEndpointInUse = (nodeId, interfaceName) => {
+            return Object.values(this.topology.connections).some(conn => 
+                (conn.sourceNode.id === nodeId && conn.sourceInterface.name === interfaceName) ||
+                (conn.targetNode.id === nodeId && conn.targetInterface.name === interfaceName)
+            );
+        };
+
+        // Check source endpoint usage
+        if (isEndpointInUse(sourceInterface.nodeId, sourceInterface.name)) {
+            Logger.warn('Connection Validation Failed', {
+                message: 'Source interface is already in use',
+                nodeId: sourceInterface.nodeId,
+                interface: sourceInterface.name
+            });
+            return false;
+        }
+
+        // Check target endpoint usage
+        if (isEndpointInUse(targetInterface.nodeId, targetInterface.name)) {
+            Logger.warn('Connection Validation Failed', {
+                message: 'Target interface is already in use',
+                nodeId: targetInterface.nodeId,
+                interface: targetInterface.name
             });
             return false;
         }
@@ -252,6 +335,9 @@ class ConnectionManager {
             targetInterface: targetInterface.name
         });
 
+        // Emit event after successful connection creation
+        this.#emit('connectionAdded', connection);
+
         return connection;
     }
 
@@ -269,19 +355,126 @@ class ConnectionManager {
     }
 
     /**
-     * Remove a connection
-     * @param {string} connectionKey - Connection key
+     * Add a node to the topology
+     * @param {Object} node - Node details
+     * @returns {Object|null} Added node or null if failed
      */
-    removeConnection(connectionKey) {
-        const connection = this.topology.connections[connectionKey];
-        
-        if (connection) {
-            // Remove from connections and lines
-            delete this.topology.connections[connectionKey];
-            delete this.topology.lines[connection.id];
-
-            Logger.info('Connection Removed', { connectionKey });
+    addNode(node) {
+        console.log('Adding node:', node);
+        if (!this.topology.nodes) {
+            this.topology.nodes = {};
         }
+        this.topology.nodes[node.id] = node;
+        this.#emit('nodeAdded', node);
+        console.log('Current nodes:', this.topology.nodes);
+        return node;
+    }
+
+    /**
+     * Add a connection to the topology
+     * @param {Object} connection - Connection details
+     * @returns {Object|null} Created connection or null if failed
+     */
+    addConnection(connection) {
+        const result = this.createConnection(
+            connection.sourceNode, 
+            connection.targetNode, 
+            connection.sourceInterface, 
+            connection.targetInterface
+        );
+        
+        if (result) {
+            this.#emit('connectionAdded', result);
+            Logger.info('Connection Added', {
+                connectionId: result.id,
+                totalConnections: Object.keys(this.topology.connections).length
+            });
+        }
+
+        return result;
+    }
+
+    /**
+     * Remove a node from the topology
+     * @param {string} nodeId - ID of the node to remove
+     * @returns {Object|null} Removed node or null if not found
+     */
+    removeNode(nodeId) {
+        console.log('Before node removal - Connections:', this.topology.connections);
+        
+        // Find and remove all connections associated with this node
+        const connectionsToRemove = Object.entries(this.topology.connections)
+            .filter(([_, connection]) => 
+                connection.sourceNode.id === nodeId || 
+                connection.targetNode.id === nodeId
+            );
+
+        // Log connections being removed
+        Logger.info('Removing connections for node', {
+            nodeId,
+            connectionsToRemove: connectionsToRemove.map(([key]) => key),
+            connectionCount: connectionsToRemove.length
+        });
+
+        // Remove each connection and emit events
+        connectionsToRemove.forEach(([key, connection]) => {
+            // Remove the connection
+            delete this.topology.connections[key];
+            
+            // Emit event for connection removal
+            this.#emit('connectionRemoved', connection);
+            
+            Logger.info('Connection removed:', {
+                connectionId: key,
+                remainingConnections: Object.keys(this.topology.connections).length
+            });
+        });
+
+        // Remove the node from topology
+        const removedNode = this.topology.nodes[nodeId];
+        delete this.topology.nodes[nodeId];
+
+        console.log('After node removal - Connections:', {
+            connections: this.topology.connections,
+            connectionCount: Object.keys(this.topology.connections).length
+        });
+
+        // Log the node removal
+        Logger.info('Node Removed from Topology', { 
+            nodeId, 
+            remainingNodes: Object.keys(this.topology.nodes).length,
+            remainingConnections: Object.keys(this.topology.connections).length,
+            connectionsBefore: connectionsToRemove.length,
+            connectionsAfter: Object.keys(this.topology.connections).length
+        });
+
+        // Emit event after successful node removal
+        if (removedNode) {
+            this.#emit('nodeRemoved', removedNode);
+        }
+
+        return removedNode;
+    }
+
+    /**
+     * Remove a connection from the topology
+     * @param {string} connectionId - ID of the connection to remove
+     * @returns {Object|null} Removed connection or null if not found
+     */
+    removeConnection(connectionId) {
+        const connection = this.topology.connections[connectionId];
+        if (connection) {
+            delete this.topology.connections[connectionId];
+            this.#emit('connectionRemoved', connection);
+            
+            Logger.info('Connection Removed', {
+                connectionId,
+                remainingConnections: Object.keys(this.topology.connections).length
+            });
+
+            return connection;
+        }
+        return null;
     }
 
     /**
@@ -339,6 +532,9 @@ class ConnectionManager {
             type: nodeData.type,
             libraryDataAvailable: !!libraryNodeData
         });
+
+        // Emit event after successful node registration
+        this.#emit('nodeAdded', nodeData);
 
         return nodeData.id;  // Return node ID as registration result
     }
@@ -410,26 +606,80 @@ class ConnectionManager {
     }
 
     /**
-     * Remove a node from the topology
-     * @param {string} nodeId - ID of the node to remove
+     * Get network statistics
+     * @returns {Object} Network statistics
      */
-    removeNode(nodeId) {
-        // Remove all connections associated with this node
-        Object.keys(this.topology.connections).forEach(connectionKey => {
-            const connection = this.topology.connections[connectionKey];
-            if (connection.sourceNodeId === nodeId || connection.targetNodeId === nodeId) {
-                delete this.topology.connections[connectionKey];
+    getNetworkStatistics() {
+        const nodes = this.getAllNodes();
+        const connections = this.getAllConnections();
+        const endpoints = this.getEndpoints();
+
+        console.log('Network Statistics:', {
+            nodes,
+            connections,
+            endpoints,
+            topology: this.topology
+        });
+
+        return {
+            totalNodes: nodes.length,
+            totalConnections: connections.length,
+            totalEndpoints: endpoints.length
+        };
+    }
+
+    /**
+     * Static method to get network statistics
+     * @returns {Object} Network statistics
+     */
+    static getNetworkStatistics() {
+        return new ConnectionManager().getNetworkStatistics();
+    }
+
+    /**
+     * Get all unique nodes in the network
+     * @returns {Array} List of unique nodes
+     */
+    getAllNodes() {
+        // Get nodes directly from topology
+        const nodes = Object.values(this.topology.nodes || {});
+        console.log('Getting all nodes:', nodes);
+        return nodes;
+    }
+
+    /**
+     * Get all connections in the network
+     * @returns {Array} List of connections
+     */
+    getAllConnections() {
+        const connections = Object.values(this.topology.connections || {});
+        console.log('Getting all connections:', {
+            connections,
+            count: connections.length,
+            rawConnections: this.topology.connections
+        });
+        return connections;
+    }
+
+    /**
+     * Get all endpoints in the network
+     * @returns {Array} List of all endpoints from all nodes
+     */
+    getEndpoints() {
+        const endpoints = [];
+        
+        // Get all nodes
+        const nodes = Object.values(this.topology.nodes || {});
+        
+        // Collect all endpoints from each node
+        nodes.forEach(node => {
+            if (node.endpoints) {
+                endpoints.push(...node.endpoints);
             }
         });
 
-        // Remove the node from topology
-        delete this.topology.nodes[nodeId];
-
-        // Log the node removal
-        Logger.info('Node Removed from Topology', { 
-            nodeId, 
-            remainingNodes: Object.keys(this.topology.nodes).length 
-        });
+        console.log('All endpoints:', endpoints);
+        return endpoints;
     }
 }
 

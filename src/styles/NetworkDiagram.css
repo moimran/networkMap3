@@ -35,53 +35,72 @@
     cursor: crosshair;
 }
 
-/* Main diagram container */
-.diagram-container {
+/* Network diagram container */
+.network-diagram {
+    display: flex;
+    flex-direction: column;
     width: 100%;
     height: 100%;
+    overflow: hidden;
+}
+
+/* Main diagram container */
+.diagram-container {
     position: relative;
-    background-color: #fff;
-    border-radius: 4px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    transition: all 0.3s ease;
 }
 
 /* Network diagram node styles */
-.diagram-node {
+.network-node {
     position: absolute;
     cursor: move;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
 }
 
-.diagram-node.selected {
-    border: 2px solid #ff0000;
-    box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
-    z-index: 21;
+.network-node:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
 }
 
-.active {
-    border: 1px dotted green;
+.network-node.selected {
+    border: 2px solid #1976d2;
+    box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.2);
 }
 
-.hover {
-    border: 1px dotted red;
+.network-node img {
+    max-width: 48px;
+    max-height: 48px;
+    object-fit: contain;
 }
 
-/* jsPlumb specific styles */
-._jsPlumb_endpoint {
-    z-index: 23;
+/* Connection styles */
+.jtk-connector {
+    z-index: 4;
 }
 
 .jtk-endpoint {
-    z-index: 2;
-    cursor: pointer;
-}
-
-.jtk-connector {
-    z-index: 0;
-    cursor: pointer;
+    z-index: 5;
 }
 
 .jtk-overlay {
-    z-index: 24;
+    z-index: 6;
+}
+
+/* Connection state styles */
+.connection-target-highlight {
+    outline: 2px dashed #1976d2;
+    outline-offset: 2px;
 }
 
 /* Ensure endpoints are visible */
@@ -99,7 +118,6 @@
 .jtk-endpoint svg {
     z-index: 23 !important;
     visibility: visible !important;
-    opacity: 1 !important;
     pointer-events: auto !important;
 }
 

@@ -6,8 +6,7 @@ import {
     DotEndpoint 
 } from "@jsplumb/browser-ui";
 import '../styles/NetworkDiagram.css';
-
-// Import utility modules
+import { CANVAS_THEMES } from '../constants/themes';
 import { 
     NETWORK_DIAGRAM_CONFIG, 
     Logger, 
@@ -80,22 +79,41 @@ const JsPlumbSingleton = (() => {
     };
 })();
 
-const NetworkDiagram = () => {
-    // Refs for managing jsPlumb and container
+/**
+ * NetworkDiagram Component
+ * Renders an interactive network diagram with draggable nodes and connections
+ * 
+ * @param {Object} props
+ * @param {string} props.currentTheme - Current theme ID for the canvas
+ */
+const NetworkDiagram = ({ currentTheme }) => {
+    // Refs and basic state
     const containerRef = useRef(null);
     const jsPlumbInstance = useRef(null);
     const nodesRef = useRef({});
-
-    // State management
     const [nodes, setNodes] = useState([]);
     const [contextMenu, setContextMenu] = useState(null);
+    const [nodeConfigModal, setNodeConfigModal] = useState(null);
+    const [deviceTypeCount, setDeviceTypeCount] = useState({});
     const [connectionState, setConnectionState] = useState({
         sourceNode: null,
         sourceEndpoint: null,
         stage: 'IDLE' // IDLE, SOURCE_SELECTED
     });
-    const [deviceTypeCount, setDeviceTypeCount] = useState({});
-    const [nodeConfigModal, setNodeConfigModal] = useState(null);
+
+    // Get active theme settings
+    const activeTheme = useMemo(() => 
+        Object.values(CANVAS_THEMES).find(theme => theme.id === currentTheme) || CANVAS_THEMES.GRID_LIGHT,
+        [currentTheme]
+    );
+
+    // Memoize background styles to prevent unnecessary re-renders
+    const backgroundStyles = useMemo(() => ({
+        backgroundColor: activeTheme.background,
+        backgroundImage: activeTheme.backgroundImage,
+        backgroundSize: activeTheme.backgroundSize,
+        backgroundRepeat: 'repeat'
+    }), [activeTheme]);
 
     // Create a memoized function to generate unique node names
     const generateNodeName = useCallback((deviceType) => {
@@ -651,6 +669,8 @@ const NetworkDiagram = () => {
                 }))
             };
 
+            // Add node to ConnectionManager topology first
+            ConnectionManager.addNode(newNode);
             nodes.push(newNode);
         }
 
@@ -709,7 +729,8 @@ const NetworkDiagram = () => {
         Logger.info('Multiple Nodes Created', { 
             deviceType, 
             nodeCount: nodes.length,
-            iconPath
+            iconPath,
+            topology: ConnectionManager.topology
         });
     }, [generateNodeName]);
 
@@ -719,6 +740,21 @@ const NetworkDiagram = () => {
             setNodeConfigModal(null);
         }
     }, [createMultipleNodes, nodeConfigModal]);
+
+    const handleSave = useCallback(() => {
+        // TODO: Implement save functionality
+        toast.info('Save functionality coming soon');
+    }, []);
+
+    const handleUndo = useCallback(() => {
+        // TODO: Implement undo functionality
+        toast.info('Undo functionality coming soon');
+    }, []);
+
+    const handleRedo = useCallback(() => {
+        // TODO: Implement redo functionality
+        toast.info('Redo functionality coming soon');
+    }, []);
 
     const renderContextMenu = useMemo(() => {
         if (!contextMenu) return null;
@@ -789,53 +825,60 @@ const NetworkDiagram = () => {
 
     // Render network diagram
     return (
-        <div 
-            ref={containerRef}
-            className="network-diagram-container"
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            onClick={handleCanvasClick}  
-        >
-            {/* Render Nodes */}
-            {nodes.map(node => (
-                <div 
-                    id={node.id}
-                    key={node.id}
-                    className={`network-node ${
-                        connectionState.stage === 'SOURCE_SELECTED' 
-                            ? 'connection-target-highlight' 
-                            : ''
-                    }`}
-                    style={{
-                        position: 'absolute',
-                        left: node.position.x,
-                        top: node.position.y
-                    }}
-                    onContextMenu={(e) => handleContextMenu(e, node)}
-                >
-                    <img 
-                        src={node.iconPath}
-                        alt={node.type}
+        <div className="network-diagram">
+            <div
+                ref={containerRef}
+                className="diagram-container"
+                style={{
+                    flex: 1,
+                    minHeight: 'calc(100vh - 48px)', // Adjust for dense toolbar
+                    ...backgroundStyles
+                }}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                onClick={handleCanvasClick}  
+            >
+                {/* Render Nodes */}
+                {nodes.map(node => (
+                    <div 
+                        id={node.id}
+                        key={node.id}
+                        className={`network-node ${
+                            connectionState.stage === 'SOURCE_SELECTED' 
+                                ? 'connection-target-highlight' 
+                                : ''
+                        }`}
+                        style={{
+                            position: 'absolute',
+                            left: node.position.x,
+                            top: node.position.y
+                        }}
+                        onContextMenu={(e) => handleContextMenu(e, node)}
+                    >
+                        <img 
+                            src={node.iconPath}
+                            alt={node.type}
+                        />
+                    </div>
+                ))}
+
+                {/* Context Menu for Endpoint Selection */}
+                {renderContextMenu}
+
+                {/* Node Configuration Modal */}
+                {nodeConfigModal && (
+                    <NodeConfigModal 
+                        open={!!nodeConfigModal}
+                        onClose={() => setNodeConfigModal(null)}
+                        nodeConfig={{
+                            type: nodeConfigModal.type,
+                            iconPath: nodeConfigModal.iconPath,
+                            endpoints: nodeConfigModal.endpoints || []
+                        }}
+                        onSubmit={handleNodeConfigSubmit}
                     />
-                </div>
-            ))}
-
-            {/* Context Menu for Endpoint Selection */}
-            {renderContextMenu}
-
-            {/* Node Configuration Modal */}
-            {nodeConfigModal && (
-                <NodeConfigModal 
-                    open={!!nodeConfigModal}
-                    onClose={() => setNodeConfigModal(null)}
-                    nodeConfig={{
-                        type: nodeConfigModal.type,
-                        iconPath: nodeConfigModal.iconPath,
-                        endpoints: nodeConfigModal.endpoints || []
-                    }}
-                    onSubmit={handleNodeConfigSubmit}
-                />
-            )}
+                )}
+            </div>
         </div>
     );
 };

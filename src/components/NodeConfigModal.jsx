@@ -11,6 +11,7 @@ import {
     Paper 
 } from '@mui/material';
 import PropTypes from 'prop-types';
+import ConnectionManager from '../utils/ConnectionManager';
 
 /**
  * Constants for node configuration
@@ -73,6 +74,7 @@ const NodeConfigModal = ({
      * Confirm node creation
      */
     const handleConfirm = () => {
+        // Simply pass the node count to parent component
         onSubmit(nodeCount);
         onClose();
     };

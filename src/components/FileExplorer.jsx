@@ -101,17 +101,17 @@ const TreeItemContent = styled.div`
   align-items: center;
   gap: 0.5rem;
   flex: 1;
-  padding-left: ${props => props.depth * 1.5}rem;
+  padding-left: ${props => props.$depth * 1.5}rem;
 `;
 
 const TreeLine = styled.span`
   position: absolute;
-  left: ${props => (props.depth - 0.5) * 1.5}rem;
+  left: ${props => (props.$depth - 0.5) * 1.5}rem;
   top: 50%;
   width: 1rem;
   height: 1px;
   background-color: ${({ theme }) => theme.colors?.border || '#e0e0e0'};
-  display: ${props => (props.depth > 0 ? 'block' : 'none')};
+  display: ${props => (props.$depth > 0 ? 'block' : 'none')};
 `;
 
 const TreeItemActions = styled.div`
@@ -255,30 +255,27 @@ const FileExplorer = () => {
     }
   };
 
-  const renderTreeItem = (item, depth = 0) => {
-    const isExpanded = expandedFolders[item.path];
-    const isSelected = selectedItem?.path === item.path;
-
-    return (
+  const renderTreeItems = (items, depth = 0) => {
+    return items.map(item => (
       <React.Fragment key={item.path}>
-        <TreeItem 
+        <TreeItem
           onClick={(e) => handleItemClick(item, e)}
           style={{ 
-            backgroundColor: isSelected ? colors.hover : 'transparent' 
+            backgroundColor: selectedItem?.path === item.path ? colors.hover : 'transparent' 
           }}
         >
-          <TreeLine depth={depth} />
-          <TreeItemContent depth={depth}>
+          <TreeLine $depth={depth} />
+          <TreeItemContent $depth={depth}>
             {item.type === 'folder' && (
               <IconButton 
                 onClick={(e) => toggleFolder(item, e)}
                 style={{ padding: '2px' }}
               >
-                {isExpanded ? <FaChevronDown color="#666" /> : <FaChevronRight color="#666" />}
+                {expandedFolders[item.path] ? <FaChevronDown color="#666" /> : <FaChevronRight color="#666" />}
               </IconButton>
             )}
             {item.type === 'folder' ? (
-              isExpanded ? 
+              expandedFolders[item.path] ? 
                 <FaFolderOpen style={{ color: colors.folderOpen }} /> : 
                 <FaFolder style={{ color: colors.folder }} />
             ) : (
@@ -309,13 +306,13 @@ const FileExplorer = () => {
           </TreeItemActions>
         </TreeItem>
 
-        {item.type === 'folder' && isExpanded && item.children && (
+        {item.type === 'folder' && expandedFolders[item.path] && item.children && (
           <div style={{ marginLeft: '20px' }}>
-            {item.children.map(child => renderTreeItem(child, depth + 1))}
+            {renderTreeItems(item.children, depth + 1)}
           </div>
         )}
       </React.Fragment>
-    );
+    ));
   };
 
   return (
@@ -333,7 +330,7 @@ const FileExplorer = () => {
       </FileExplorerHeader>
 
       <div>
-        {files.map(item => renderTreeItem(item))}
+        {files.map(item => renderTreeItems([item], 0))}
       </div>
 
       <Dialog open={openDialog} onClose={handleDialogClose}>
