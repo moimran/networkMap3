@@ -19,6 +19,7 @@ import './styles/App.css';
 function App() {
     // Theme state
     const [currentTheme, setCurrentTheme] = useState(CANVAS_THEMES.GRID_LIGHT.id);
+    const [hasCanvasActivity, setHasCanvasActivity] = useState(false);
 
     // Set CSS variables for layout dimensions
     useEffect(() => {
@@ -57,6 +58,10 @@ function App() {
         toast.info('Redo functionality coming soon');
     }, []);
 
+    const handleThemeChange = useCallback((newTheme) => {
+        setCurrentTheme(newTheme);
+    }, []);
+
     return (
         <div className="app">
             <div className="left-sidebar">
@@ -66,14 +71,18 @@ function App() {
                 <div className="toolbar">
                     <Toolbar 
                         currentTheme={currentTheme}
-                        onThemeChange={setCurrentTheme}
+                        onThemeChange={handleThemeChange}
                         onSave={handleSave}
                         onUndo={handleUndo}
                         onRedo={handleRedo}
+                        hasCanvasActivity={hasCanvasActivity}
                     />
                 </div>
                 <div className="diagram-wrapper">
-                    <NetworkDiagram currentTheme={currentTheme} />
+                    <NetworkDiagram 
+                        currentTheme={currentTheme}
+                        onCanvasActivityChange={setHasCanvasActivity}
+                    />
                 </div>
             </div>
             <div className="right-sidebar">

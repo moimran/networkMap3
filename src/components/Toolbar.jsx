@@ -54,6 +54,7 @@ const ThemeSelect = styled(Select)`
  * @param {Function} props.onRedo - Redo handler
  * @param {string} props.currentTheme - Current theme ID
  * @param {Function} props.onThemeChange - Theme change handler
+ * @param {boolean} props.hasCanvasActivity - Whether there's canvas activity
  */
 const Toolbar = ({
     onSaveDiagram, 
@@ -61,7 +62,8 @@ const Toolbar = ({
     onUndo,
     onRedo,
     currentTheme,
-    onThemeChange
+    onThemeChange,
+    hasCanvasActivity
 }) => {
     // State to track network statistics
     const [networkStats, setNetworkStats] = useState({
@@ -130,10 +132,25 @@ const Toolbar = ({
             <MuiToolbar variant="dense">
                 {/* Left side: Action buttons */}
                 <Box display="flex" alignItems="center" gap={1}>
-                    <Tooltip title="Save Diagram">
-                        <IconButton onClick={onSaveDiagram} color="primary">
-                            <SaveIcon />
-                        </IconButton>
+                    <Tooltip title={hasCanvasActivity ? "Save Diagram" : "No changes to save"}>
+                        <span>
+                            <IconButton 
+                                onClick={onSaveDiagram} 
+                                color={hasCanvasActivity ? "primary" : "default"}
+                                disabled={!hasCanvasActivity}
+                                sx={{ 
+                                    color: hasCanvasActivity ? '#007bff' : '#bdbdbd',
+                                    '&:hover': {
+                                        backgroundColor: hasCanvasActivity ? 'rgba(0, 123, 255, 0.04)' : 'transparent'
+                                    },
+                                    '&.Mui-disabled': {
+                                        color: '#bdbdbd'
+                                    }
+                                }}
+                            >
+                                <SaveIcon />
+                            </IconButton>
+                        </span>
                     </Tooltip>
                     <Tooltip title="Load Diagram">
                         <IconButton onClick={onLoadDiagram} color="primary">

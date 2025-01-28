@@ -21,7 +21,7 @@ import useThemeManager from '../hooks/useThemeManager';
 import HistoryManager from '../utils/HistoryManager';
 
 // Refs and basic state
-const NetworkDiagram = ({ currentTheme }) => {
+const NetworkDiagram = ({ currentTheme, onCanvasActivityChange }) => {
     const containerRef = useRef(null);
     const jsPlumbInstance = useRef(null);
     const nodesRef = useRef({});
@@ -29,6 +29,7 @@ const NetworkDiagram = ({ currentTheme }) => {
     const [contextMenu, setContextMenu] = useState(null);
     const [nodeConfigModal, setNodeConfigModal] = useState(null);
     const [deviceTypeCount, setDeviceTypeCount] = useState({});
+    const [hasCanvasActivity, setHasCanvasActivity] = useState(false);
     const [connectionState, setConnectionState] = useState({
         sourceNode: null,
         sourceEndpoint: null,
@@ -39,6 +40,45 @@ const NetworkDiagram = ({ currentTheme }) => {
     const connectionManager = useConnectionManager(jsPlumbInstance);
     const nodeManager = useNodeManager({ jsPlumbInstance, setNodes, nodesRef });
     const { activeTheme, backgroundStyles } = useThemeManager(currentTheme);
+
+    // Update parent component when canvas activity changes
+    useEffect(() => {
+        onCanvasActivityChange?.(hasCanvasActivity);
+    }, [hasCanvasActivity, onCanvasActivityChange]);
+
+    // Create a function to track canvas activity
+    const trackCanvasActivity = useCallback(() => {
+        setHasCanvasActivity(true);
+    }, []);
+
+    // Add canvas activity tracking to relevant operations
+    useEffect(() => {
+        if (jsPlumbInstance.current) {
+            // Track connection changes
+            jsPlumbInstance.current.bind('connection', trackCanvasActivity);
+            jsPlumbInstance.current.bind('connectionDetached', trackCanvasActivity);
+            jsPlumbInstance.current.bind('connectionMoved', trackCanvasActivity);
+            
+            // Track node movement
+            jsPlumbInstance.current.bind('elementDragged', trackCanvasActivity);
+        }
+
+        return () => {
+            if (jsPlumbInstance.current) {
+                jsPlumbInstance.current.unbind('connection');
+                jsPlumbInstance.current.unbind('connectionDetached');
+                jsPlumbInstance.current.unbind('connectionMoved');
+                jsPlumbInstance.current.unbind('elementDragged');
+            }
+        };
+    }, [trackCanvasActivity, jsPlumbInstance]);
+
+    // Track node changes
+    useEffect(() => {
+        if (nodes.length > 0) {  // Only track when nodes are added, not on initial load
+            trackCanvasActivity();
+        }
+    }, [nodes.length, trackCanvasActivity]);
 
     // Create a memoized function to generate unique node names
     const generateNodeName = useCallback((deviceType, index = undefined) => {
@@ -360,9 +400,36 @@ const NetworkDiagram = ({ currentTheme }) => {
     }, [createMultipleNodes, nodeConfigModal]);
 
     const handleSave = useCallback(() => {
+        if (!hasCanvasActivity) {
+            toast.info('No changes to save');
+            return;
+        }
         // TODO: Implement save functionality
         toast.info('Save functionality coming soon');
-    }, []);
+        setHasCanvasActivity(false); // Reset activity after save
+    }, [hasCanvasActivity]);
+
+    useEffect(() => {
+        const handleNodeMovement = () => {
+            trackCanvasActivity();
+        };
+
+        if (jsPlumbInstance.current) {
+            jsPlumbInstance.current.bind('connection', trackCanvasActivity);
+            jsPlumbInstance.current.bind('connectionDetached', trackCanvasActivity);
+            jsPlumbInstance.current.bind('connectionMoved', trackCanvasActivity);
+            jsPlumbInstance.current.bind('elementDragged', trackCanvasActivity);
+        }
+
+        return () => {
+            if (jsPlumbInstance.current) {
+                jsPlumbInstance.current.unbind('connection');
+                jsPlumbInstance.current.unbind('connectionDetached');
+                jsPlumbInstance.current.unbind('connectionMoved');
+                jsPlumbInstance.current.unbind('elementDragged');
+            }
+        };
+    }, [trackCanvasActivity, jsPlumbInstance]);
 
     const handleUndo = useCallback(() => {
         if (HistoryManager.undo()) {
