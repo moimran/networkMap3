@@ -17,6 +17,7 @@ import TopologyManager from '../utils/TopologyManager'
 // Import theme constants
 import { CANVAS_THEMES } from '../constants/themes';
 import Logger from '../utils/Logger';
+import toast from '../utils/toast'; // Assuming toast is imported from a utility file
 
 const NetworkStatsContainer = styled.div`
     display: flex;
@@ -77,10 +78,10 @@ const Toolbar = ({
         Logger.debug('Toolbar: Attempting to update network stats...');
         try {
             const stats = TopologyManager.getTopologyNetworkStatistics();
-            console.debug('Toolbar: Retrieved network stats:', stats);
+            Logger.debug('Toolbar: Retrieved network stats:', stats);
             setNetworkStats(stats);
         } catch (error) {
-            console.error('Toolbar: Failed to update network stats:', error);
+            Logger.error('Toolbar: Failed to update network stats:', error);
             // Fallback to default stats
             setNetworkStats({
                 totalNodes: 0,
@@ -123,6 +124,64 @@ const Toolbar = ({
         label: theme.name
     }));
 
+    const handleSave = () => {
+        // Get the current topology state
+        const topology = TopologyManager.getTopology();
+        
+        // Create a clean configuration object with only the necessary data
+        const config = {
+            nodes: {},
+            connections: {},
+            timestamp: new Date().toISOString(),
+            version: '1.0'
+        };
+
+        // Sanitize nodes data
+        Object.entries(topology.nodes || {}).forEach(([nodeId, node]) => {
+            config.nodes[nodeId] = {
+                id: node.id,
+                type: node.type,
+                name: node.name,
+                interfaces: node.interfaces,
+                position: node.position,
+                properties: node.properties
+            };
+        });
+
+        // Sanitize connections data
+        Object.entries(topology.connections || {}).forEach(([connId, conn]) => {
+            config.connections[connId] = {
+                id: conn.id,
+                sourceNode: {
+                    id: conn.sourceNode.id,
+                    interface: conn.sourceNode.interface
+                },
+                targetNode: {
+                    id: conn.targetNode.id,
+                    interface: conn.targetNode.interface
+                }
+            };
+        });
+        
+        // Print the configuration in debug console using Logger
+        Logger.info('Network Topology Configuration:', {
+            config,
+            nodeCount: Object.keys(config.nodes).length,
+            connectionCount: Object.keys(config.connections).length
+        });
+        
+        // Also print using regular console for backup
+        console.log('Network Topology Configuration:', config);
+        
+        // Call the onSaveDiagram prop if provided
+        if (onSaveDiagram) {
+            onSaveDiagram(config);
+        }
+        
+        // Show success message
+        toast.success('Topology configuration saved to debug console');
+    };
+
     return (
         <AppBar 
             position="static" 
@@ -135,18 +194,8 @@ const Toolbar = ({
                     <Tooltip title={hasCanvasActivity ? "Save Diagram" : "No changes to save"}>
                         <span>
                             <IconButton 
-                                onClick={onSaveDiagram} 
-                                color={hasCanvasActivity ? "primary" : "default"}
+                                onClick={handleSave}
                                 disabled={!hasCanvasActivity}
-                                sx={{ 
-                                    color: hasCanvasActivity ? '#007bff' : '#bdbdbd',
-                                    '&:hover': {
-                                        backgroundColor: hasCanvasActivity ? 'rgba(0, 123, 255, 0.04)' : 'transparent'
-                                    },
-                                    '&.Mui-disabled': {
-                                        color: '#bdbdbd'
-                                    }
-                                }}
                             >
                                 <SaveIcon />
                             </IconButton>
