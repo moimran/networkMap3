@@ -6,7 +6,10 @@ const GlobalTopology = {
     connections: {},
     lines: {},
     networks: {},
-    labinfo: {}
+    labinfo: {},
+    theme: null,
+    zoomLevel: null,
+    panPosition: null
 };
 
 class TopologyManager {
@@ -488,11 +491,264 @@ class TopologyManager {
     }
 
     /**
-     * Get global topology
-     * @returns {Object} Current global topology state
+     * Get current topology data for saving
+     * @returns {Object} Comprehensive topology configuration
      */
     getTopology() {
-        return this.topology;
+        // Capture full node and connection details for exact re-rendering
+        return {
+            version: '1.0',
+            timestamp: new Date().toISOString(),
+            nodes: Object.entries(this.topology.nodes).reduce((acc, [nodeId, node]) => {
+                acc[nodeId] = {
+                    id: node.id,
+                    type: node.type,
+                    name: node.name,
+                    position: node.position,
+                    size: node.size || { width: 100, height: 100 }, // Default size if not specified
+                    icon: node.icon, // Capture full icon path
+                    endpoints: node.endpoints || [], // Capture all endpoint details
+                    properties: node.properties || {}, // Capture any additional node properties
+                    interfaces: node.interfaces || [] // Capture interface details
+                };
+                return acc;
+            }, {}),
+            connections: Object.entries(this.topology.connections).reduce((acc, [connId, conn]) => {
+                acc[connId] = {
+                    id: connId,
+                    sourceNode: {
+                        id: conn.sourceNode.id,
+                        interface: conn.sourceInterface?.name,
+                        interfaceType: conn.sourceInterface?.type
+                    },
+                    targetNode: {
+                        id: conn.targetNode.id,
+                        interface: conn.targetInterface?.name,
+                        interfaceType: conn.targetInterface?.type
+                    },
+                    connectionStyle: conn.connectionStyle || {}, // Capture connection styling
+                    properties: conn.properties || {} // Capture any additional connection properties
+                };
+                return acc;
+            }, {}),
+            uiState: {
+                // Capture any global UI state that might be relevant for re-rendering
+                theme: GlobalTopology.theme,
+                zoomLevel: GlobalTopology.zoomLevel,
+                panPosition: GlobalTopology.panPosition
+            }
+        };
+    }
+
+    /**
+     * Save topology configuration to a file
+     * @param {string} filename - Optional filename for saving
+     * @returns {Object} Saved configuration
+     */
+    saveTopology(filename = null) {
+        const config = this.getTopology();
+        
+        // Validate configuration
+        if (Object.keys(config.nodes).length === 0) {
+            Logger.warn('TopologyManager: No nodes to save');
+            return null;
+        }
+
+        // Optional file saving logic (for future implementation)
+        if (filename) {
+            // Placeholder for file saving mechanism
+            Logger.debug('Saving topology to file:', filename);
+        }
+
+        // Emit save event with full configuration
+        this.#emit('topologySaved', config);
+
+        return config;
+    }
+
+    /**
+     * Load topology configuration
+     * @param {Object} config - Topology configuration to load
+     * @returns {boolean} Whether loading was successful
+     */
+    loadTopology(config) {
+        try {
+            // Validate input
+            if (!config || !config.nodes || !config.connections) {
+                Logger.error('TopologyManager: Invalid topology configuration');
+                return false;
+            }
+
+            Logger.debug('TopologyManager: Starting topology load', {
+                nodeCount: Object.keys(config.nodes).length,
+                connectionCount: Object.keys(config.connections).length,
+                config
+            });
+
+            // Reset current topology
+            this.resetTopology();
+
+            // First, restore all nodes
+            Object.entries(config.nodes).forEach(([nodeId, nodeData]) => {
+                this.topology.nodes[nodeId] = {
+                    ...nodeData,
+                    id: nodeData.id,
+                    type: nodeData.type,
+                    name: nodeData.name,
+                    position: nodeData.position || { x: 0, y: 0 },
+                    size: nodeData.size || { width: 100, height: 100 },
+                    icon: nodeData.icon,
+                    endpoints: nodeData.endpoints || [],
+                    properties: nodeData.properties || {},
+                    interfaces: nodeData.interfaces || []
+                };
+
+                // Emit node added event
+                this.#emit('nodeAdded', this.topology.nodes[nodeId]);
+            });
+
+            // Then restore all connections
+            Object.entries(config.connections).forEach(([connId, connData]) => {
+                try {
+                    // Find source and target nodes
+                    const sourceNode = this.topology.nodes[connData.sourceNode.id];
+                    const targetNode = this.topology.nodes[connData.targetNode.id];
+
+                    if (!sourceNode || !targetNode) {
+                        Logger.warn('TopologyManager: Skipping connection due to missing nodes', {
+                            connectionId: connId,
+                            sourceNodeId: connData.sourceNode.id,
+                            targetNodeId: connData.targetNode.id
+                        });
+                        return;
+                    }
+
+                    // Create connection with proper structure
+                    this.topology.connections[connId] = {
+                        id: connId,
+                        sourceNode: {
+                            id: sourceNode.id,
+                            name: sourceNode.name
+                        },
+                        targetNode: {
+                            id: targetNode.id,
+                            name: targetNode.name
+                        },
+                        sourceInterface: {
+                            name: connData.sourceNode.interface,
+                            type: connData.sourceNode.interfaceType
+                        },
+                        targetInterface: {
+                            name: connData.targetNode.interface,
+                            type: connData.targetNode.interfaceType
+                        },
+                        connectionStyle: connData.connectionStyle || {},
+                        properties: connData.properties || {}
+                    };
+
+                    // Emit connection added event
+                    this.#emit('connectionAdded', this.topology.connections[connId]);
+
+                } catch (error) {
+                    Logger.error('TopologyManager: Error restoring connection', {
+                        connectionId: connId,
+                        error: error.message,
+                        connectionData: connData
+                    });
+                }
+            });
+
+            // Restore UI state if available
+            if (config.uiState) {
+                GlobalTopology.theme = config.uiState.theme;
+                GlobalTopology.zoomLevel = config.uiState.zoomLevel;
+                GlobalTopology.panPosition = config.uiState.panPosition;
+            }
+
+            // Log final state
+            Logger.info('TopologyManager: Topology loaded successfully', {
+                nodeCount: Object.keys(this.topology.nodes).length,
+                connectionCount: Object.keys(this.topology.connections).length,
+                nodes: Object.keys(this.topology.nodes),
+                connections: Object.keys(this.topology.connections)
+            });
+
+            // Emit load event with full topology
+            this.#emit('topologyLoaded', {
+                nodes: this.topology.nodes,
+                connections: this.topology.connections,
+                uiState: config.uiState
+            });
+
+            return true;
+
+        } catch (error) {
+            Logger.error('TopologyManager: Failed to load topology', {
+                error: error.message,
+                stack: error.stack,
+                config
+            });
+            return false;
+        }
+    }
+
+    /**
+     * Get topology network statistics
+     * @returns {Object} Network statistics
+     */
+    getTopologyNetworkStatistics() {
+        return {
+            totalNodes: Object.keys(this.topology.nodes).length,
+            totalConnections: Object.keys(this.topology.connections).length,
+            totalEndpoints: Object.values(this.topology.nodes)
+                .reduce((total, node) => total + (node.interfaces?.length || 0), 0)
+        };
+    }
+
+    /**
+     * Get all unique nodes in the network
+     * @returns {Array} List of unique nodes
+     */
+    getTopologyAllNodes() {
+        // Get nodes directly from topology
+        const nodes = Object.values(this.topology.nodes || {});
+        console.debug('TopologyManager: Getting all nodes:', nodes);
+        return nodes;
+    }
+
+    /**
+     * Get all connections in the network
+     * @returns {Array} List of connections
+     */
+    getTopologyAllConnections() {
+        const connections = Object.values(this.topology.connections || {});
+        console.debug('TopologyManager: Getting all connections:', {
+            connections,
+            count: connections.length,
+            rawConnections: this.topology.connections
+        });
+        return connections;
+    }
+
+    /**
+     * Get all endpoints in the network
+     * @returns {Array} List of all endpoints from all nodes
+     */
+    getTopologyEndpoints() {
+        const endpoints = [];
+        
+        // Get all nodes
+        const nodes = Object.values(this.topology.nodes || {});
+        
+        // Collect all endpoints from each node
+        nodes.forEach(node => {
+            if (node.endpoints) {
+                endpoints.push(...node.endpoints);
+            }
+        });
+
+        console.debug('TopologyManager: All endpoints:', endpoints);
+        return endpoints;
     }
 
     /**
@@ -600,83 +856,6 @@ class TopologyManager {
         }
 
         return node.endpoints.filter(endpoint => this.isEndpointAvailable(endpoint));
-    }
-
-    /**
-     * Get network statistics
-     * @returns {Object} Network statistics
-     */
-    getTopologyNetworkStatistics() {
-        const nodes = this.getTopologyAllNodes();
-        const connections = this.getTopologyAllConnections();
-        const endpoints = this.getTopologyEndpoints();
-
-        console.debug('TopologyManager: Network Statistics:', {
-            nodes,
-            connections,
-            endpoints,
-            topology: this.topology
-        });
-
-        return {
-            totalNodes: nodes.length,
-            totalConnections: connections.length,
-            totalEndpoints: endpoints.length
-        };
-    }
-
-    /**
-     * Static method to get network statistics
-     * @returns {Object} Network statistics
-     */
-    static getNetworkStatistics() {
-        return new TopologyManager().getTopologyNetworkStatistics();
-    }
-
-    /**
-     * Get all unique nodes in the network
-     * @returns {Array} List of unique nodes
-     */
-    getTopologyAllNodes() {
-        // Get nodes directly from topology
-        const nodes = Object.values(this.topology.nodes || {});
-        console.debug('TopologyManager: Getting all nodes:', nodes);
-        return nodes;
-    }
-
-    /**
-     * Get all connections in the network
-     * @returns {Array} List of connections
-     */
-    getTopologyAllConnections() {
-        const connections = Object.values(this.topology.connections || {});
-        console.debug('TopologyManager: Getting all connections:', {
-            connections,
-            count: connections.length,
-            rawConnections: this.topology.connections
-        });
-        return connections;
-    }
-
-    /**
-     * Get all endpoints in the network
-     * @returns {Array} List of all endpoints from all nodes
-     */
-    getTopologyEndpoints() {
-        const endpoints = [];
-        
-        // Get all nodes
-        const nodes = Object.values(this.topology.nodes || {});
-        
-        // Collect all endpoints from each node
-        nodes.forEach(node => {
-            if (node.endpoints) {
-                endpoints.push(...node.endpoints);
-            }
-        });
-
-        console.debug('TopologyManager: All endpoints:', endpoints);
-        return endpoints;
     }
 }
 

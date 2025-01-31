@@ -399,14 +399,88 @@ const NetworkDiagram = ({ currentTheme, onCanvasActivityChange }) => {
         }
     }, [createMultipleNodes, nodeConfigModal]);
 
-    const handleSave = useCallback(() => {
+    const handleSave = useCallback(async () => {
         if (!hasCanvasActivity) {
             toast.info('No changes to save');
             return;
         }
-        // TODO: Implement save functionality
-        toast.info('Save functionality coming soon');
-        setHasCanvasActivity(false); // Reset activity after save
+
+        try {
+            // Get the current topology state
+            const topology = TopologyManager.getTopology();
+
+            Logger.info('Topology Structure:', topology);
+            
+            // Create a clean configuration object
+            const config = {
+                nodes: {},
+                connections: {},
+                timestamp: new Date().toISOString(),
+                version: '1.0'
+            };
+
+            // Sanitize nodes data
+            Object.entries(topology.nodes || {}).forEach(([nodeId, node]) => {
+                config.nodes[nodeId] = {
+                    id: node.id,
+                    type: node.type,
+                    name: node.name,
+                    interfaces: node.interfaces,
+                    position: node.position,
+                    properties: node.properties
+                };
+            });
+
+            // Sanitize connections data
+            Object.entries(topology.connections || {}).forEach(([connId, conn]) => {
+                config.connections[connId] = {
+                    id: conn.id,
+                    sourceNode: {
+                        id: conn.sourceNode.id,
+                        interface: conn.sourceNode.interface
+                    },
+                    targetNode: {
+                        id: conn.targetNode.id,
+                        interface: conn.targetNode.interface
+                    }
+                };
+            });
+
+            // Generate a unique filename based on timestamp
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const filename = `network-diagram-${timestamp}.json`;
+
+            // Create a Blob from the JSON data
+            const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+            
+            // Create a download link and trigger it
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            
+            // Cleanup
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+
+            toast.success(`Diagram saved as ${filename}`);
+            setHasCanvasActivity(false);
+            
+            Logger.info('Diagram Configuration Saved', {
+                filename,
+                nodeCount: Object.keys(config.nodes).length,
+                connectionCount: Object.keys(config.connections).length,
+                configSize: blob.size
+            });
+        } catch (error) {
+            Logger.error('Failed to save diagram configuration', {
+                error: error.message,
+                stack: error.stack
+            });
+            toast.error('Failed to save diagram configuration');
+        }
     }, [hasCanvasActivity]);
 
     useEffect(() => {
@@ -632,6 +706,120 @@ const NetworkDiagram = ({ currentTheme, onCanvasActivityChange }) => {
             }
         });
     }, [connectionManager]);
+
+    // Add loadTopology function
+    const loadTopology = useCallback((config) => {
+        try {
+            Logger.info('Loading topology', config);
+
+            // Clear existing nodes and connections
+            setNodes([]);
+            if (jsPlumbInstance.current) {
+                // Get all existing connections
+                const connections = jsPlumbInstance.current.getConnections();
+                connections.forEach(conn => {
+                    jsPlumbInstance.current.deleteConnection(conn);
+                });
+
+                // Remove all endpoints for each node
+                nodes.forEach(node => {
+                    const nodeElement = document.getElementById(node.id);
+                    if (nodeElement) {
+                        jsPlumbInstance.current.removeAllEndpoints(nodeElement);
+                    }
+                });
+            }
+
+            // Load topology into TopologyManager
+            const success = TopologyManager.loadTopology(config);
+            if (!success) {
+                toast.error('Failed to load topology configuration');
+                return;
+            }
+
+            // Create nodes from topology
+            const nodeConfigs = Object.values(config.nodes).map(nodeData => {
+                // Get icon path from node type
+                const iconPath = `/net_icons/${nodeData.type}.svg`;
+
+                // Ensure position is properly set
+                const position = {
+                    x: nodeData.position?.x || 0,
+                    y: nodeData.position?.y || 0
+                };
+
+                Logger.debug('Creating node with position and icon', {
+                    nodeId: nodeData.id,
+                    position,
+                    iconPath
+                });
+
+                return {
+                    id: nodeData.id,
+                    type: nodeData.type,
+                    name: nodeData.name,
+                    position,
+                    size: nodeData.size || { width: 100, height: 100 },
+                    iconPath,
+                    interfaces: nodeData.interfaces || [],
+                    properties: nodeData.properties || {},
+                    endpoints: nodeData.endpoints || []
+                };
+            });
+
+            // Update nodes state
+            setNodes(nodeConfigs);
+
+            // Setup jsPlumb for each node after a short delay
+            setTimeout(() => {
+                nodeConfigs.forEach(node => {
+                    const nodeElement = document.getElementById(node.id);
+                    if (nodeElement) {
+                        // Setup endpoints for each interface
+                        node.endpoints?.forEach(endpoint => {
+                            JsPlumbWrapper.createNodeEndpoint(node.id, {
+                                endpoint: JsPlumbCoreWrapper.createDotEndpoint({
+                                    cssClass: `interface-endpoint-${endpoint.type}`
+                                }),
+                                anchor: JsPlumbCoreWrapper.getAnchorLocations().Continuous,
+                                interfaceType: endpoint.type
+                            });
+                        });
+                    } else {
+                        Logger.warn('Node element not found during endpoint setup', {
+                            nodeId: node.id,
+                            nodeName: node.name
+                        });
+                    }
+                });
+
+                // Render connections after nodes are set up
+                setTimeout(() => {
+                    connectionManager.renderExistingConnections();
+                }, 100);
+            }, 100);
+
+            toast.success('Topology loaded successfully');
+        } catch (error) {
+            Logger.error('Failed to load topology', {
+                error: error.message,
+                stack: error.stack
+            });
+            toast.error('Failed to load topology');
+        }
+    }, [connectionManager, setNodes, nodes]);
+
+    // Listen for topology loaded event
+    useEffect(() => {
+        const handleTopologyLoaded = (event) => {
+            if (event?.detail?.config) {
+                loadTopology(event.detail.config);
+            }
+        };
+
+        window.addEventListener('topologyLoaded', handleTopologyLoaded);
+        return () => window.removeEventListener('topologyLoaded', handleTopologyLoaded);
+    }, [loadTopology]);
 
     return (
         <div className="network-diagram">

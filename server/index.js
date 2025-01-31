@@ -139,6 +139,9 @@ function validatePath(filePath, baseDir) {
   return fullPath;
 }
 
+// Import topology handlers
+import { saveTopology, loadTopology } from './topology.js';
+
 // API Routes
 app.get('/api/list-icons', async (req, res) => {
   try {
@@ -259,6 +262,74 @@ app.get('/api/load-diagram/:filename', async (req, res) => {
   }
 });
 
+// Topology API Routes
+app.post('/api/topology/save', async (req, res) => {
+  try {
+    await saveTopology(req, res);
+  } catch (error) {
+    console.error('Error in save topology route:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+});
+
+app.get('/api/topology/load', async (req, res) => {
+  try {
+    await loadTopology(req, res);
+  } catch (error) {
+    console.error('Error in load topology route:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+});
+
+app.get('/api/topology/list', async (req, res) => {
+  try {
+    const diagramsDir = PATHS.DIAGRAMS;
+    
+    // Ensure diagrams directory exists
+    await ensureDir(diagramsDir);
+    
+    // Get list of topology files
+    const files = await fs.readdir(diagramsDir);
+    const topologyFiles = await Promise.all(
+      files
+        .filter(file => file.endsWith('.json'))
+        .map(async filename => {
+          const filePath = path.join(diagramsDir, filename);
+          const stats = await fs.stat(filePath);
+          
+          try {
+            const content = JSON.parse(await fs.readFile(filePath, 'utf8'));
+            return {
+              filename,
+              size: stats.size,
+              created: stats.birthtime,
+              nodeCount: Object.keys(content.nodes || {}).length,
+              connectionCount: Object.keys(content.connections || {}).length
+            };
+          } catch (error) {
+            console.error(`Error reading topology file ${filename}:`, error);
+            return {
+              filename,
+              size: stats.size,
+              created: stats.birthtime,
+              nodeCount: 0,
+              connectionCount: 0,
+              error: 'Failed to parse topology file'
+            };
+          }
+        })
+    );
+    
+    // Sort by creation time, newest first
+    topologyFiles.sort((a, b) => new Date(b.created) - new Date(a.created));
+    
+    res.json({ files: topologyFiles });
+  } catch (error) {
+    console.error('Error in list topology route:', error);
+    res.status(500).json({ message: 'Failed to list topology files', error: error.message });
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err);
@@ -268,4 +339,5 @@ app.use((err, req, res, next) => {
 // Start the server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+  console.log('Paths:', PATHS);
 });
