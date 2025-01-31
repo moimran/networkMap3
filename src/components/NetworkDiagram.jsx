@@ -770,30 +770,42 @@ const NetworkDiagram = ({ currentTheme, onCanvasActivityChange }) => {
             // Update nodes state
             setNodes(nodeConfigs);
 
-            // Setup jsPlumb for each node after a short delay
+            // Setup jsPlumb for each node after nodes are rendered
             setTimeout(() => {
                 nodeConfigs.forEach(node => {
                     const nodeElement = document.getElementById(node.id);
-                    if (nodeElement) {
-                        // Setup endpoints for each interface
-                        node.endpoints?.forEach(endpoint => {
-                            JsPlumbWrapper.createNodeEndpoint(node.id, {
-                                endpoint: JsPlumbCoreWrapper.createDotEndpoint({
-                                    cssClass: `interface-endpoint-${endpoint.type}`
-                                }),
-                                anchor: JsPlumbCoreWrapper.getAnchorLocations().Continuous,
-                                interfaceType: endpoint.type
-                            });
-                        });
-                    } else {
+                    if (!nodeElement) {
                         Logger.warn('Node element not found during endpoint setup', {
                             nodeId: node.id,
                             nodeName: node.name
                         });
+                        return;
                     }
+
+                    // Wait for the node element to be fully rendered
+                    requestAnimationFrame(() => {
+                        // Setup endpoints for each interface
+                        node.endpoints?.forEach(endpoint => {
+                            const endpointConfig = {
+                                cssClass: `interface-endpoint-${endpoint.type}`,
+                                anchor: JsPlumbCoreWrapper.getAnchorLocations().Continuous,
+                                interfaceType: endpoint.type,
+                                paintStyle: { 
+                                    fill: "transparent",
+                                    stroke: "transparent"
+                                },
+                                hoverPaintStyle: { 
+                                    fill: "transparent",
+                                    stroke: "transparent"
+                                }
+                            };
+
+                            JsPlumbWrapper.createNodeEndpoint(nodeElement, endpointConfig);
+                        });
+                    });
                 });
 
-                // Render connections after nodes are set up
+                // Render connections after nodes and endpoints are set up
                 setTimeout(() => {
                     connectionManager.renderExistingConnections();
                 }, 100);

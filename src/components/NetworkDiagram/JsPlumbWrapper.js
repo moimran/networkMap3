@@ -7,8 +7,7 @@ import {
 } from "@jsplumb/browser-ui";
 import { 
     NETWORK_DIAGRAM_CONFIG, 
-    Logger, 
-    EndpointConfigLoader 
+    Logger 
 } from '../../utils/NetworkDiagramConfig';
 
 /**
@@ -104,27 +103,57 @@ class JsPlumbWrapper {
             return null;
         }
 
-        const defaultConfig = {
-            endpoint: DotEndpoint,
-            anchor: AnchorLocations.Continuous,
-            ...EndpointConfigLoader.getDefaultEndpointConfig(),
-            ...customConfig
-        };
-
         try {
-            const endpoint = this.instance.addEndpoint(nodeId, defaultConfig);
+            // Get DOM element
+            const element = typeof nodeId === 'string' ? document.getElementById(nodeId) : nodeId;
+            if (!element) {
+                Logger.error('Cannot create endpoint: DOM element not found', { nodeId });
+                return null;
+            }
+
+            const defaultConfig = {
+                endpoint: BlankEndpoint,
+                anchor: AnchorLocations.Continuous,
+                isSource: true,
+                isTarget: true,
+                connector: ["Flowchart", { cornerRadius: 5 }],
+                paintStyle: { 
+                    fill: "transparent",
+                    stroke: "transparent"
+                },
+                hoverPaintStyle: { 
+                    fill: "transparent",
+                    stroke: "transparent"
+                },
+                connectorStyle: {
+                    strokeWidth: 2,
+                    stroke: "#666",
+                    joinstyle: "round"
+                },
+                connectorHoverStyle: {
+                    strokeWidth: 3,
+                    stroke: "#FF6600"
+                },
+                maxConnections: -1,
+                ...customConfig
+            };
+
+            // Create endpoint
+            const endpoint = this.instance.addEndpoint(element, defaultConfig);
             
             // Track endpoints for each node
-            if (!this.endpoints[nodeId]) {
-                this.endpoints[nodeId] = [];
+            const elementId = element.id || nodeId;
+            if (!this.endpoints[elementId]) {
+                this.endpoints[elementId] = [];
             }
-            this.endpoints[nodeId].push(endpoint);
+            this.endpoints[elementId].push(endpoint);
 
             return endpoint;
         } catch (error) {
             Logger.error('Endpoint Creation Failed', {
                 nodeId,
-                errorMessage: error.message
+                errorMessage: error.message,
+                stack: error.stack
             });
             return null;
         }
