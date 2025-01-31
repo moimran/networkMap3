@@ -495,6 +495,32 @@ class TopologyManager {
      * @returns {Object} Comprehensive topology configuration
      */
     getTopology() {
+        // Recalculate all node positions before saving
+        Object.entries(this.topology.nodes).forEach(([nodeId, node]) => {
+            const nodeElement = document.getElementById(nodeId);
+            const containerElement = nodeElement?.closest('.network-diagram');
+            
+            if (nodeElement && containerElement) {
+                const elementRect = nodeElement.getBoundingClientRect();
+                const containerRect = containerElement.getBoundingClientRect();
+                
+                // Calculate position relative to the container including scroll
+                node.position = {
+                    x: Math.round(elementRect.left - containerRect.left + containerElement.scrollLeft),
+                    y: Math.round(elementRect.top - containerRect.top + containerElement.scrollTop)
+                };
+                
+                Logger.debug('TopologyManager: Node position recalculated', {
+                    nodeId,
+                    position: node.position,
+                    elementRect,
+                    containerRect,
+                    scrollLeft: containerElement.scrollLeft,
+                    scrollTop: containerElement.scrollTop
+                });
+            }
+        });
+
         // Capture full node and connection details for exact re-rendering
         return {
             version: '1.0',

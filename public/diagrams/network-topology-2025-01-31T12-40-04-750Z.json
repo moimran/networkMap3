@@ -1,0 +1,318 @@
+{
+  "version": "1.0",
+  "timestamp": "2025-01-31T12:40:06.228Z",
+  "nodes": {
+    "1738327109499-994704": {
+      "id": "1738327109499-994704",
+      "type": "router-2d-gen-dark-s",
+      "name": "router-2d-gen-dark-s-1",
+      "position": {
+        "x": 99,
+        "y": 409
+      },
+      "size": {
+        "width": 100,
+        "height": 100
+      },
+      "endpoints": [
+        {
+          "name": "GigabitEthernet0/0",
+          "type": "Ethernet",
+          "speed": "1000Mbps",
+          "id": "1738327109499-278719",
+          "nodeId": "1738327109499-994704",
+          "originalName": "GigabitEthernet0/0"
+        },
+        {
+          "name": "GigabitEthernet0/1",
+          "type": "Ethernet",
+          "speed": "1000Mbps",
+          "id": "1738327109499-87843",
+          "nodeId": "1738327109499-994704",
+          "originalName": "GigabitEthernet0/1"
+        },
+        {
+          "name": "Serial0/0/0",
+          "type": "Serial",
+          "speed": "128Kbps",
+          "id": "1738327109499-655173",
+          "nodeId": "1738327109499-994704",
+          "originalName": "Serial0/0/0"
+        },
+        {
+          "name": "Serial0/0/1",
+          "type": "Serial",
+          "speed": "128Kbps",
+          "id": "1738327109499-309129",
+          "nodeId": "1738327109499-994704",
+          "originalName": "Serial0/0/1"
+        },
+        {
+          "name": "FastEthernet0/0",
+          "type": "Ethernet",
+          "speed": "100Mbps",
+          "id": "1738327109499-481807",
+          "nodeId": "1738327109499-994704",
+          "originalName": "FastEthernet0/0"
+        },
+        {
+          "name": "FastEthernet0/1",
+          "type": "Ethernet",
+          "speed": "100Mbps",
+          "id": "1738327109499-581616",
+          "nodeId": "1738327109499-994704",
+          "originalName": "FastEthernet0/1"
+        }
+      ],
+      "properties": {},
+      "interfaces": []
+    },
+    "1738327109499-863330": {
+      "id": "1738327109499-863330",
+      "type": "router-2d-gen-dark-s",
+      "name": "router-2d-gen-dark-s-2",
+      "position": {
+        "x": 567,
+        "y": 96
+      },
+      "size": {
+        "width": 100,
+        "height": 100
+      },
+      "endpoints": [
+        {
+          "name": "GigabitEthernet0/0",
+          "type": "Ethernet",
+          "speed": "1000Mbps",
+          "id": "1738327109499-261222",
+          "nodeId": "1738327109499-863330",
+          "originalName": "GigabitEthernet0/0"
+        },
+        {
+          "name": "GigabitEthernet0/1",
+          "type": "Ethernet",
+          "speed": "1000Mbps",
+          "id": "1738327109499-778660",
+          "nodeId": "1738327109499-863330",
+          "originalName": "GigabitEthernet0/1"
+        },
+        {
+          "name": "Serial0/0/0",
+          "type": "Serial",
+          "speed": "128Kbps",
+          "id": "1738327109499-799899",
+          "nodeId": "1738327109499-863330",
+          "originalName": "Serial0/0/0"
+        },
+        {
+          "name": "Serial0/0/1",
+          "type": "Serial",
+          "speed": "128Kbps",
+          "id": "1738327109499-625606",
+          "nodeId": "1738327109499-863330",
+          "originalName": "Serial0/0/1"
+        },
+        {
+          "name": "FastEthernet0/0",
+          "type": "Ethernet",
+          "speed": "100Mbps",
+          "id": "1738327109499-201116",
+          "nodeId": "1738327109499-863330",
+          "originalName": "FastEthernet0/0"
+        },
+        {
+          "name": "FastEthernet0/1",
+          "type": "Ethernet",
+          "speed": "100Mbps",
+          "id": "1738327109499-150186",
+          "nodeId": "1738327109499-863330",
+          "originalName": "FastEthernet0/1"
+        }
+      ],
+      "properties": {},
+      "interfaces": []
+    },
+    "1738327109499-749982": {
+      "id": "1738327109499-749982",
+      "type": "router-2d-gen-dark-s",
+      "name": "router-2d-gen-dark-s-3",
+      "position": {
+        "x": 1692,
+        "y": 142
+      },
+      "size": {
+        "width": 100,
+        "height": 100
+      },
+      "endpoints": [
+        {
+          "name": "GigabitEthernet0/0",
+          "type": "Ethernet",
+          "speed": "1000Mbps",
+          "id": "1738327109499-109287",
+          "nodeId": "1738327109499-749982",
+          "originalName": "GigabitEthernet0/0"
+        },
+        {
+          "name": "GigabitEthernet0/1",
+          "type": "Ethernet",
+          "speed": "1000Mbps",
+          "id": "1738327109499-633949",
+          "nodeId": "1738327109499-749982",
+          "originalName": "GigabitEthernet0/1"
+        },
+        {
+          "name": "Serial0/0/0",
+          "type": "Serial",
+          "speed": "128Kbps",
+          "id": "1738327109499-833298",
+          "nodeId": "1738327109499-749982",
+          "originalName": "Serial0/0/0"
+        },
+        {
+          "name": "Serial0/0/1",
+          "type": "Serial",
+          "speed": "128Kbps",
+          "id": "1738327109499-164177",
+          "nodeId": "1738327109499-749982",
+          "originalName": "Serial0/0/1"
+        },
+        {
+          "name": "FastEthernet0/0",
+          "type": "Ethernet",
+          "speed": "100Mbps",
+          "id": "1738327109499-61986",
+          "nodeId": "1738327109499-749982",
+          "originalName": "FastEthernet0/0"
+        },
+        {
+          "name": "FastEthernet0/1",
+          "type": "Ethernet",
+          "speed": "100Mbps",
+          "id": "1738327109499-614332",
+          "nodeId": "1738327109499-749982",
+          "originalName": "FastEthernet0/1"
+        }
+      ],
+      "properties": {},
+      "interfaces": []
+    },
+    "1738327109500-43351": {
+      "id": "1738327109500-43351",
+      "type": "router-2d-gen-dark-s",
+      "name": "router-2d-gen-dark-s-4",
+      "position": {
+        "x": 797,
+        "y": 96
+      },
+      "size": {
+        "width": 100,
+        "height": 100
+      },
+      "endpoints": [
+        {
+          "name": "GigabitEthernet0/0",
+          "type": "Ethernet",
+          "speed": "1000Mbps",
+          "id": "1738327109500-313756",
+          "nodeId": "1738327109500-43351",
+          "originalName": "GigabitEthernet0/0"
+        },
+        {
+          "name": "GigabitEthernet0/1",
+          "type": "Ethernet",
+          "speed": "1000Mbps",
+          "id": "1738327109500-775076",
+          "nodeId": "1738327109500-43351",
+          "originalName": "GigabitEthernet0/1"
+        },
+        {
+          "name": "Serial0/0/0",
+          "type": "Serial",
+          "speed": "128Kbps",
+          "id": "1738327109500-548272",
+          "nodeId": "1738327109500-43351",
+          "originalName": "Serial0/0/0"
+        },
+        {
+          "name": "Serial0/0/1",
+          "type": "Serial",
+          "speed": "128Kbps",
+          "id": "1738327109500-754482",
+          "nodeId": "1738327109500-43351",
+          "originalName": "Serial0/0/1"
+        },
+        {
+          "name": "FastEthernet0/0",
+          "type": "Ethernet",
+          "speed": "100Mbps",
+          "id": "1738327109500-871312",
+          "nodeId": "1738327109500-43351",
+          "originalName": "FastEthernet0/0"
+        },
+        {
+          "name": "FastEthernet0/1",
+          "type": "Ethernet",
+          "speed": "100Mbps",
+          "id": "1738327109500-788065",
+          "nodeId": "1738327109500-43351",
+          "originalName": "FastEthernet0/1"
+        }
+      ],
+      "properties": {},
+      "interfaces": []
+    }
+  },
+  "connections": {
+    "1738327109499-994704-GigabitEthernet0/0-to-1738327109499-749982-GigabitEthernet0/0": {
+      "id": "1738327109499-994704-GigabitEthernet0/0-to-1738327109499-749982-GigabitEthernet0/0",
+      "sourceNode": {
+        "id": "1738327109499-994704",
+        "interface": "GigabitEthernet0/0",
+        "interfaceType": "Ethernet"
+      },
+      "targetNode": {
+        "id": "1738327109499-749982",
+        "interface": "GigabitEthernet0/0",
+        "interfaceType": "Ethernet"
+      },
+      "connectionStyle": {},
+      "properties": {}
+    },
+    "1738327109499-863330-Serial0/0/1-to-1738327109499-749982-Serial0/0/1": {
+      "id": "1738327109499-863330-Serial0/0/1-to-1738327109499-749982-Serial0/0/1",
+      "sourceNode": {
+        "id": "1738327109499-863330",
+        "interface": "Serial0/0/1",
+        "interfaceType": "Serial"
+      },
+      "targetNode": {
+        "id": "1738327109499-749982",
+        "interface": "Serial0/0/1",
+        "interfaceType": "Serial"
+      },
+      "connectionStyle": {},
+      "properties": {}
+    },
+    "1738327109500-43351-GigabitEthernet0/1-to-1738327109499-863330-GigabitEthernet0/1": {
+      "id": "1738327109500-43351-GigabitEthernet0/1-to-1738327109499-863330-GigabitEthernet0/1",
+      "sourceNode": {
+        "id": "1738327109500-43351",
+        "interface": "GigabitEthernet0/1",
+        "interfaceType": "Ethernet"
+      },
+      "targetNode": {
+        "id": "1738327109499-863330",
+        "interface": "GigabitEthernet0/1",
+        "interfaceType": "Ethernet"
+      },
+      "connectionStyle": {},
+      "properties": {}
+    }
+  },
+  "uiState": {
+    "theme": null,
+    "zoomLevel": null,
+    "panPosition": null
+  }
+}
