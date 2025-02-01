@@ -520,17 +520,26 @@ class TopologyManager {
         try {
             Logger.debug('TopologyManager: Starting topology reset');
 
-            // Reset all topology data
-            this.topology.nodes = {};
-            this.topology.connections = {};
-            this.topology.lines = {};
-            this.topology.networks = {};
-            this.topology.labinfo = {};
-            
-            // Emit reset event
+            // First emit the reset event to allow components to cleanup
             this.#emit('topologyReset');
 
-            Logger.info('TopologyManager: Topology reset successful');
+            // Wait for a microtask to allow React to process the event
+            setTimeout(() => {
+                // Reset all topology data
+                this.topology.nodes = {};
+                this.topology.connections = {};
+                this.topology.lines = {};
+                this.topology.networks = {};
+                this.topology.labinfo = {};
+                
+                // Emit loaded event to trigger re-render
+                this.#emit('topologyLoaded', {
+                    nodes: {},
+                    connections: {}
+                });
+
+                Logger.info('TopologyManager: Topology reset successful');
+            }, 0);
         } catch (error) {
             Logger.error('TopologyManager: Failed to reset topology', {
                 error: error.message,
@@ -659,94 +668,80 @@ class TopologyManager {
                 config
             });
 
-            // Reset current topology
+            // Reset current topology before loading new one
             this.resetTopology();
 
-            // First, restore all nodes
-            Object.entries(config.nodes).forEach(([nodeId, nodeData]) => {
-                this.topology.nodes[nodeId] = {
-                    ...nodeData,
-                    id: nodeData.id,
-                    type: nodeData.type,
-                    name: nodeData.name,
-                    position: nodeData.position || { x: 0, y: 0 },
-                    size: nodeData.size || { width: 100, height: 100 },
-                    icon: nodeData.icon, // Capture full icon path
-                    endpoints: nodeData.endpoints || [], // Capture all endpoint details
-                    properties: nodeData.properties || {}, // Capture any additional node properties
-                    interfaces: nodeData.interfaces || [] // Capture interface details
-                };
-
-                // Emit node added event
-                this.#emit('nodeAdded', this.topology.nodes[nodeId]);
-            });
-
-            // Then restore all connections
-            Object.entries(config.connections).forEach(([connId, connData]) => {
-                try {
-                    // Find source and target nodes
-                    const sourceNode = this.topology.nodes[connData.sourceNode.id];
-                    const targetNode = this.topology.nodes[connData.targetNode.id];
-
-                    if (!sourceNode || !targetNode) {
-                        Logger.warn('TopologyManager: Skipping connection due to missing nodes', {
-                            connectionId: connId,
-                            sourceNodeId: connData.sourceNode.id,
-                            targetNodeId: connData.targetNode.id
-                        });
-                        return;
-                    }
-
-                    // Create connection with proper structure
-                    this.topology.connections[connId] = {
-                        id: connId,
-                        sourceNode: {
-                            id: sourceNode.id,
-                            name: sourceNode.name
-                        },
-                        targetNode: {
-                            id: targetNode.id,
-                            name: targetNode.name
-                        },
-                        sourceInterface: {
-                            name: connData.sourceNode.interface,
-                            type: connData.sourceNode.interfaceType
-                        },
-                        targetInterface: {
-                            name: connData.targetNode.interface,
-                            type: connData.targetNode.interfaceType
-                        },
-                        connectionStyle: connData.connectionStyle || {},
-                        properties: connData.properties || {}
+            // Wait for a microtask to allow reset to complete
+            setTimeout(() => {
+                // First, restore all nodes
+                Object.entries(config.nodes).forEach(([nodeId, nodeData]) => {
+                    this.topology.nodes[nodeId] = {
+                        ...nodeData,
+                        id: nodeData.id,
+                        type: nodeData.type,
+                        name: nodeData.name,
+                        position: nodeData.position || { x: 0, y: 0 },
+                        size: nodeData.size || { width: 100, height: 100 },
+                        icon: nodeData.icon,
+                        endpoints: nodeData.endpoints || [],
+                        properties: nodeData.properties || {},
+                        interfaces: nodeData.interfaces || []
                     };
 
-                    // Emit connection added event
-                    this.#emit('connectionAdded', this.topology.connections[connId]);
+                    // Emit node added event
+                    this.#emit('nodeAdded', this.topology.nodes[nodeId]);
+                });
 
-                } catch (error) {
-                    Logger.error('TopologyManager: Error restoring connection', {
-                        connectionId: connId,
-                        error: error.message,
-                        connectionData: connData
-                    });
-                }
-            });
+                // Then restore all connections
+                Object.entries(config.connections).forEach(([connId, connData]) => {
+                    try {
+                        // Find source and target nodes
+                        const sourceNode = this.topology.nodes[connData.sourceNode.id];
+                        const targetNode = this.topology.nodes[connData.targetNode.id];
 
-            // Emit topology loaded event
-            this.#emit('topologyLoaded', config);
+                        if (!sourceNode || !targetNode) {
+                            Logger.warn('TopologyManager: Skipping connection due to missing nodes', {
+                                connectionId: connId,
+                                sourceNodeId: connData.sourceNode.id,
+                                targetNodeId: connData.targetNode.id
+                            });
+                            return;
+                        }
 
-            // Log final state
-            Logger.info('TopologyManager: Topology loaded successfully', {
-                nodeCount: Object.keys(this.topology.nodes).length,
-                connectionCount: Object.keys(this.topology.connections).length,
-                nodes: Object.keys(this.topology.nodes),
-                connections: Object.keys(this.topology.connections)
-            });
+                        // Create connection
+                        this.topology.connections[connId] = {
+                            id: connId,
+                            sourceNode: sourceNode,
+                            targetNode: targetNode,
+                            sourceInterface: connData.sourceNode.interface,
+                            targetInterface: connData.targetNode.interface,
+                            connectionStyle: connData.connectionStyle || {},
+                            properties: connData.properties || {}
+                        };
+
+                        // Emit connection added event
+                        this.#emit('connectionAdded', this.topology.connections[connId]);
+                    } catch (error) {
+                        Logger.error('TopologyManager: Failed to restore connection', {
+                            connectionId: connId,
+                            error: error.message,
+                            stack: error.stack
+                        });
+                    }
+                });
+
+                // Emit topology loaded event
+                this.#emit('topologyLoaded', {
+                    nodes: this.topology.nodes,
+                    connections: this.topology.connections
+                });
+
+                Logger.info('TopologyManager: Successfully loaded topology');
+            }, 0);
 
             return true;
-
         } catch (error) {
-            Logger.error('TopologyManager: Error loading topology', {
+            Logger.error('TopologyManager: Failed to load topology', {
                 error: error.message,
                 stack: error.stack
             });

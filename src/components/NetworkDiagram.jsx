@@ -713,14 +713,16 @@ const NetworkDiagram = ({ currentTheme, onCanvasActivityChange }) => {
             try {
                 Logger.debug('NetworkDiagram: Handling topology loaded event');
                 
-                // Clear existing nodes and connections
+                // Step 1: Reset jsPlumb instance first
                 if (jsPlumbInstance.current) {
-                    jsPlumbInstance.current.reset();
+                    JsPlumbWrapper.reset();
                 }
+
+                // Step 2: Clear React state after jsPlumb cleanup
                 setNodes([]);
                 nodesRef.current = {};
 
-                // Create nodes from loaded topology
+                // Step 3: Create nodes from loaded topology
                 const loadedNodes = Object.values(TopologyManager.topology.nodes);
                 loadedNodes.forEach(nodeData => {
                     const node = {
@@ -733,19 +735,19 @@ const NetworkDiagram = ({ currentTheme, onCanvasActivityChange }) => {
                         iconPath: nodeData.iconPath
                     };
                     
-                    // Store node in nodesRef with proper structure
                     nodesRef.current[node.id] = {
                         node: node,
                         endpoints: []
                     };
                 });
+
+                // Step 4: Update React state with new nodes
                 setNodes(loadedNodes);
 
-                // Recreate connections after a short delay to ensure nodes are rendered
+                // Step 5: Recreate connections after nodes are rendered
                 setTimeout(() => {
                     if (jsPlumbInstance.current) {
                         Object.values(TopologyManager.topology.connections).forEach(conn => {
-                            // Create connection object for rendering
                             const connection = {
                                 sourceNode: {
                                     id: conn.sourceNode.id
@@ -763,7 +765,6 @@ const NetworkDiagram = ({ currentTheme, onCanvasActivityChange }) => {
                                 }
                             };
 
-                            // Render the connection
                             const jsPlumbConn = connectionManager.renderConnection(connection);
                             if (!jsPlumbConn) {
                                 Logger.warn('NetworkDiagram: Failed to render connection', {
@@ -785,7 +786,6 @@ const NetworkDiagram = ({ currentTheme, onCanvasActivityChange }) => {
             }
         };
 
-        // Subscribe to topology loaded event
         TopologyManager.on('topologyLoaded', handleTopologyLoaded);
 
         return () => {
@@ -924,25 +924,29 @@ const NetworkDiagram = ({ currentTheme, onCanvasActivityChange }) => {
             try {
                 Logger.debug('NetworkDiagram: Handling topology reset event');
                 
-                // Clear existing nodes and connections
+                // First reset jsPlumb instance
                 if (jsPlumbInstance.current) {
-                    jsPlumbInstance.current.reset();
+                    JsPlumbWrapper.reset();
                 }
+
+                // Then clear React state
                 setNodes([]);
                 nodesRef.current = {};
+                setContextMenu(null);
+                setNodeConfigModal(null);
+                setDeviceTypeCount({});
                 setHasCanvasActivity(false);
 
-                Logger.info('NetworkDiagram: Successfully reset topology');
+                Logger.info('NetworkDiagram: Successfully handled topology reset');
             } catch (error) {
-                Logger.error('NetworkDiagram: Error handling topology reset event', {
+                Logger.error('NetworkDiagram: Error handling topology reset', {
                     error: error.message,
                     stack: error.stack
                 });
-                toast.error('Failed to reset topology');
+                toast.error('Failed to reset diagram');
             }
         };
 
-        // Subscribe to topology reset event
         TopologyManager.on('topologyReset', handleTopologyReset);
 
         return () => {

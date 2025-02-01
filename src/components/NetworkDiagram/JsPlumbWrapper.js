@@ -255,29 +255,55 @@ class JsPlumbWrapper {
 
     /**
      * Reset the jsPlumb instance, clearing all connections and endpoints
+     * Ensures proper cleanup sequence to avoid React DOM conflicts
      */
     reset() {
         if (!this.instance) return;
 
         try {
-            // Clear connections and endpoints
-            this.instance.deleteEveryConnection();
-            
-            // Use multiple methods for endpoint deletion
-            if (this.instance.deleteEveryEndpoint) {
-                this.instance.deleteEveryEndpoint();
-            } else if (this.instance.deleteAllEndpoints) {
-                this.instance.deleteAllEndpoints();
-            }
+            // Step 1: Detach all connections first
+            const connections = this.instance.getConnections();
+            connections.forEach(conn => {
+                try {
+                    this.instance.deleteConnection(conn, {fireEvent: false});
+                } catch (err) {
+                    Logger.debug('Connection deletion warning', { 
+                        connectionId: conn.id,
+                        error: err.message 
+                    });
+                }
+            });
 
-            // Reset tracked data
+            // Step 2: Remove all endpoints
+            Object.keys(this.endpoints).forEach(nodeId => {
+                const nodeEndpoints = this.endpoints[nodeId] || [];
+                nodeEndpoints.forEach(endpoint => {
+                    try {
+                        if (endpoint && endpoint.endpoint) {
+                            this.instance.deleteEndpoint(endpoint.endpoint, {fireEvent: false});
+                        }
+                    } catch (err) {
+                        Logger.debug('Endpoint deletion warning', { 
+                            nodeId,
+                            error: err.message 
+                        });
+                    }
+                });
+            });
+
+            // Step 3: Clean up internal state
             this.connections = [];
             this.endpoints = {};
+
+            Logger.info('JsPlumb instance reset completed');
         } catch (error) {
-            Logger.warn('jsPlumb Reset Failed', { 
+            Logger.error('jsPlumb Reset Failed', { 
                 error: error.message,
-                instanceMethods: Object.keys(this.instance || {})
+                stack: error.stack
             });
+            // Continue execution despite errors to ensure state is cleaned
+            this.connections = [];
+            this.endpoints = {};
         }
     }
 

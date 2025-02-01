@@ -21,6 +21,7 @@ import Logger from '../../utils/Logger';
 import toast from '../../utils/toast';
 import SaveIcon from '@mui/icons-material/Save';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import axios from 'axios';
 
 /**
@@ -149,22 +150,41 @@ const Toolbar = ({
                     <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Tooltip title="Save Diagram">
                             <span>
-                                <IconButton onClick={handleSaveDiagram} disabled={!hasCanvasActivity}>
+                                <IconButton 
+                                    onClick={handleSaveDiagram} 
+                                    disabled={!hasCanvasActivity}
+                                    sx={{ 
+                                        color: hasCanvasActivity ? 'primary.main' : 'action.disabled'
+                                    }}
+                                >
                                     <SaveIcon />
                                 </IconButton>
                             </span>
                         </Tooltip>
                         <Tooltip title="Load Diagram">
                             <span>
-                                <IconButton onClick={() => setIsLoadDialogOpen(true)}>
+                                <IconButton 
+                                    onClick={() => setIsLoadDialogOpen(true)}
+                                    sx={{ 
+                                        color: 'primary.main'
+                                    }}
+                                >
                                     <CloudDownloadIcon />
                                 </IconButton>
                             </span>
                         </Tooltip>
                         <Tooltip title="Reset Diagram">
                             <span>
-                                <IconButton onClick={handleResetClick}>
-                                    <Typography variant="body1">Reset</Typography>
+                                <IconButton 
+                                    onClick={handleResetClick}
+                                    sx={{ 
+                                        color: 'error.main',
+                                        '&:hover': {
+                                            color: 'error.dark'
+                                        }
+                                    }}
+                                >
+                                    <RestartAltIcon />
                                 </IconButton>
                             </span>
                         </Tooltip>

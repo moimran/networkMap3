@@ -63,11 +63,18 @@ const StatisticsPanel = () => {
         TopologyManager.on('nodeRemoved', updateStats);
         TopologyManager.on('connectionAdded', updateStats);
         TopologyManager.on('connectionRemoved', updateStats);
+        TopologyManager.on('topologyReset', updateStats);
+        TopologyManager.on('topologyLoaded', updateStats);
 
         // Cleanup subscription
         return () => {
-            // Note: If TopologyManager provides an off() method, we should use it here
-            // For now, the cleanup will happen automatically when the component unmounts
+            TopologyManager.off('topologyChanged', updateStats);
+            TopologyManager.off('nodeAdded', updateStats);
+            TopologyManager.off('nodeRemoved', updateStats);
+            TopologyManager.off('connectionAdded', updateStats);
+            TopologyManager.off('connectionRemoved', updateStats);
+            TopologyManager.off('topologyReset', updateStats);
+            TopologyManager.off('topologyLoaded', updateStats);
         };
     }, []);
 
