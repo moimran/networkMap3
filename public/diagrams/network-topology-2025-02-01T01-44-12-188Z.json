@@ -1,0 +1,18 @@
+{
+  "nodes": {
+    "1738374247148-705173": {
+      "id": "1738374247148-705173",
+      "type": "router-2d-gen-dark-s",
+      "name": "router-2d-gen-dark-s-1",
+      "interfaces": [],
+      "position": {
+        "x": 500,
+        "y": 260
+      },
+      "properties": {}
+    }
+  },
+  "connections": {},
+  "timestamp": "2025-02-01T01:44:13.827Z",
+  "version": "1.0"
+}

@@ -707,7 +707,87 @@ const NetworkDiagram = ({ currentTheme, onCanvasActivityChange }) => {
         });
     }, [connectionManager]);
 
-    // Add loadTopology function
+    // Handle topology loaded event
+    useEffect(() => {
+        const handleTopologyLoaded = (event) => {
+            try {
+                Logger.debug('NetworkDiagram: Handling topology loaded event');
+                
+                // Clear existing nodes and connections
+                if (jsPlumbInstance.current) {
+                    jsPlumbInstance.current.reset();
+                }
+                setNodes([]);
+                nodesRef.current = {};
+
+                // Create nodes from loaded topology
+                const loadedNodes = Object.values(TopologyManager.topology.nodes);
+                loadedNodes.forEach(nodeData => {
+                    const node = {
+                        id: nodeData.id,
+                        type: nodeData.type,
+                        name: nodeData.name,
+                        position: nodeData.position,
+                        interfaces: nodeData.interfaces,
+                        properties: nodeData.properties,
+                        iconPath: nodeData.iconPath
+                    };
+                    nodesRef.current[node.id] = node;
+                });
+                setNodes(loadedNodes);
+
+                // Recreate connections after a short delay to ensure nodes are rendered
+                setTimeout(() => {
+                    if (jsPlumbInstance.current) {
+                        Object.values(TopologyManager.topology.connections).forEach(conn => {
+                            // Create connection object for rendering
+                            const connection = {
+                                sourceNode: {
+                                    id: conn.sourceNode.id
+                                },
+                                targetNode: {
+                                    id: conn.targetNode.id
+                                },
+                                sourceInterface: {
+                                    name: conn.sourceNode.interface,
+                                    type: conn.sourceNode.interfaceType
+                                },
+                                targetInterface: {
+                                    name: conn.targetNode.interface,
+                                    type: conn.targetNode.interfaceType
+                                }
+                            };
+
+                            // Render the connection
+                            const jsPlumbConn = connectionManager.renderConnection(connection);
+                            if (!jsPlumbConn) {
+                                Logger.warn('NetworkDiagram: Failed to render connection', {
+                                    connection,
+                                    error: 'No jsPlumb connection created'
+                                });
+                            }
+                        });
+                    }
+                }, 100);
+
+                Logger.info('NetworkDiagram: Successfully rendered loaded topology');
+            } catch (error) {
+                Logger.error('NetworkDiagram: Error handling topology loaded event', {
+                    error: error.message,
+                    stack: error.stack
+                });
+                toast.error('Failed to render loaded topology');
+            }
+        };
+
+        // Subscribe to topology loaded event
+        TopologyManager.on('topologyLoaded', handleTopologyLoaded);
+
+        return () => {
+            TopologyManager.off('topologyLoaded', handleTopologyLoaded);
+        };
+    }, [connectionManager]);
+
     const loadTopology = useCallback((config) => {
         try {
             Logger.info('Loading topology', config);
@@ -740,7 +820,7 @@ const NetworkDiagram = ({ currentTheme, onCanvasActivityChange }) => {
             // Create nodes from topology
             const nodeConfigs = Object.values(config.nodes).map(nodeData => {
                 // Get icon path from node type
-                const iconPath = `/net_icons/${nodeData.type}.svg`;
+                const iconPath = nodeData.iconPath || `/net_icons/${nodeData.type}.svg`;
 
                 // Ensure position is properly set
                 const position = {

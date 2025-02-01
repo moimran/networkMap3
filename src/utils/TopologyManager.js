@@ -360,14 +360,50 @@ class TopologyManager {
      * @returns {Object|null} Added node or null if failed
      */
     addTopologyNode(node) {
-        console.debug('Adding node:', node);
-        if (!this.topology.nodes) {
-            this.topology.nodes = {};
+        try {
+            if (!node || !node.id) {
+                Logger.warn('TopologyManager: Invalid node data', { node });
+                return null;
+            }
+
+            // Ensure iconPath is set
+            if (!node.iconPath && node.type) {
+                node.iconPath = `/net_icons/${node.type}.svg`;
+            }
+
+            // Create node with all required properties
+            this.topology.nodes[node.id] = {
+                id: node.id,
+                type: node.type,
+                name: node.name,
+                position: node.position || { x: 0, y: 0 },
+                size: node.size || { width: 100, height: 100 },
+                icon: node.icon,
+                iconPath: node.iconPath,
+                endpoints: node.endpoints || [],
+                properties: node.properties || {},
+                interfaces: node.interfaces || []
+            };
+
+            // Emit node added event
+            this.#emit('nodeAdded', this.topology.nodes[node.id]);
+
+            Logger.debug('TopologyManager: Node Added', {
+                nodeId: node.id,
+                type: node.type,
+                iconPath: node.iconPath
+            });
+
+            return this.topology.nodes[node.id];
+
+        } catch (error) {
+            Logger.error('TopologyManager: Error adding node', {
+                error: error.message,
+                stack: error.stack,
+                node
+            });
+            return null;
         }
-        this.topology.nodes[node.id] = node;
-        this.#emit('nodeAdded', node);
-        console.log('Current nodes:', this.topology.nodes);
-        return node;
     }
 
     /**
@@ -512,12 +548,15 @@ class TopologyManager {
                 
                 Logger.debug('TopologyManager: Node position recalculated', {
                     nodeId,
-                    position: node.position,
-                    elementRect,
-                    containerRect,
-                    scrollLeft: containerElement.scrollLeft,
-                    scrollTop: containerElement.scrollTop
+                    position: node.position
                 });
+            }
+        });
+
+        // Ensure each node has an iconPath
+        Object.values(this.topology.nodes).forEach(node => {
+            if (!node.iconPath && node.type) {
+                node.iconPath = `/net_icons/${node.type}.svg`;
             }
         });
 
@@ -531,11 +570,12 @@ class TopologyManager {
                     type: node.type,
                     name: node.name,
                     position: node.position,
-                    size: node.size || { width: 100, height: 100 }, // Default size if not specified
-                    icon: node.icon, // Capture full icon path
-                    endpoints: node.endpoints || [], // Capture all endpoint details
-                    properties: node.properties || {}, // Capture any additional node properties
-                    interfaces: node.interfaces || [] // Capture interface details
+                    size: node.size || { width: 100, height: 100 },
+                    icon: node.icon,
+                    iconPath: node.iconPath,
+                    endpoints: node.endpoints || [],
+                    properties: node.properties || {},
+                    interfaces: node.interfaces || []
                 };
                 return acc;
             }, {}),
@@ -549,20 +589,14 @@ class TopologyManager {
                     },
                     targetNode: {
                         id: conn.targetNode.id,
-                        interface: conn.targetInterface?.name,
-                        interfaceType: conn.targetInterface?.type
+                        interface: conn.targetNode?.interface,
+                        interfaceType: conn.targetNode?.interfaceType
                     },
-                    connectionStyle: conn.connectionStyle || {}, // Capture connection styling
-                    properties: conn.properties || {} // Capture any additional connection properties
+                    connectionStyle: conn.connectionStyle || {},
+                    properties: conn.properties || {}
                 };
                 return acc;
-            }, {}),
-            uiState: {
-                // Capture any global UI state that might be relevant for re-rendering
-                theme: GlobalTopology.theme,
-                zoomLevel: GlobalTopology.zoomLevel,
-                panPosition: GlobalTopology.panPosition
-            }
+            }, {})
         };
     }
 
@@ -623,10 +657,10 @@ class TopologyManager {
                     name: nodeData.name,
                     position: nodeData.position || { x: 0, y: 0 },
                     size: nodeData.size || { width: 100, height: 100 },
-                    icon: nodeData.icon,
-                    endpoints: nodeData.endpoints || [],
-                    properties: nodeData.properties || {},
-                    interfaces: nodeData.interfaces || []
+                    icon: nodeData.icon, // Capture full icon path
+                    endpoints: nodeData.endpoints || [], // Capture all endpoint details
+                    properties: nodeData.properties || {}, // Capture any additional node properties
+                    interfaces: nodeData.interfaces || [] // Capture interface details
                 };
 
                 // Emit node added event
@@ -684,12 +718,8 @@ class TopologyManager {
                 }
             });
 
-            // Restore UI state if available
-            if (config.uiState) {
-                GlobalTopology.theme = config.uiState.theme;
-                GlobalTopology.zoomLevel = config.uiState.zoomLevel;
-                GlobalTopology.panPosition = config.uiState.panPosition;
-            }
+            // Emit topology loaded event
+            this.#emit('topologyLoaded', config);
 
             // Log final state
             Logger.info('TopologyManager: Topology loaded successfully', {
@@ -699,20 +729,12 @@ class TopologyManager {
                 connections: Object.keys(this.topology.connections)
             });
 
-            // Emit load event with full topology
-            this.#emit('topologyLoaded', {
-                nodes: this.topology.nodes,
-                connections: this.topology.connections,
-                uiState: config.uiState
-            });
-
             return true;
 
         } catch (error) {
-            Logger.error('TopologyManager: Failed to load topology', {
+            Logger.error('TopologyManager: Error loading topology', {
                 error: error.message,
-                stack: error.stack,
-                config
+                stack: error.stack
             });
             return false;
         }
