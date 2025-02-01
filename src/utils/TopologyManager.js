@@ -517,13 +517,27 @@ class TopologyManager {
      * Reset entire topology
      */
     resetTopology() {
-        this.topology.nodes = {};
-        this.topology.connections = {};
-        this.topology.lines = {};
-        this.topology.networks = {};
-        this.topology.labinfo = {};
-        
-        Logger.debug('TopologyManager: Topology Reset');
+        try {
+            Logger.debug('TopologyManager: Starting topology reset');
+
+            // Reset all topology data
+            this.topology.nodes = {};
+            this.topology.connections = {};
+            this.topology.lines = {};
+            this.topology.networks = {};
+            this.topology.labinfo = {};
+            
+            // Emit reset event
+            this.#emit('topologyReset');
+
+            Logger.info('TopologyManager: Topology reset successful');
+        } catch (error) {
+            Logger.error('TopologyManager: Failed to reset topology', {
+                error: error.message,
+                stack: error.stack
+            });
+            throw error;
+        }
     }
 
     /**

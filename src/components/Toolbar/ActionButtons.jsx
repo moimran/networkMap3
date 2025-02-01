@@ -7,6 +7,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import LoadIcon from '@mui/icons-material/CloudDownload';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ListIcon from '@mui/icons-material/List';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import Logger from '../../utils/Logger';
 
 /**
@@ -19,7 +20,8 @@ const ActionButtons = ({
     onSaveDiagram, 
     onLoadDiagram, 
     onUploadFile,
-    onToggleListView 
+    onToggleListView,
+    onResetDiagram
 }) => {
     const handleUndo = () => {
         Logger.debug('Undo button clicked');
@@ -49,6 +51,11 @@ const ActionButtons = ({
     const handleListView = () => {
         Logger.debug('List view button clicked');
         onToggleListView();
+    };
+
+    const handleReset = () => {
+        Logger.debug('Reset button clicked');
+        onResetDiagram();
     };
 
     return (
@@ -83,6 +90,11 @@ const ActionButtons = ({
                     <ListIcon />
                 </IconButton>
             </Tooltip>
+            <Tooltip title="Reset Diagram">
+                <IconButton onClick={handleReset} color="primary">
+                    <RestartAltIcon />
+                </IconButton>
+            </Tooltip>
         </Box>
     );
 };
@@ -93,7 +105,8 @@ ActionButtons.propTypes = {
     onSaveDiagram: PropTypes.func.isRequired,
     onLoadDiagram: PropTypes.func.isRequired,
     onUploadFile: PropTypes.func.isRequired,
-    onToggleListView: PropTypes.func.isRequired
+    onToggleListView: PropTypes.func.isRequired,
+    onResetDiagram: PropTypes.func.isRequired
 };
 
 export default ActionButtons;

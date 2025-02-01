@@ -732,7 +732,12 @@ const NetworkDiagram = ({ currentTheme, onCanvasActivityChange }) => {
                         properties: nodeData.properties,
                         iconPath: nodeData.iconPath
                     };
-                    nodesRef.current[node.id] = node;
+                    
+                    // Store node in nodesRef with proper structure
+                    nodesRef.current[node.id] = {
+                        node: node,
+                        endpoints: []
+                    };
                 });
                 setNodes(loadedNodes);
 
@@ -912,6 +917,38 @@ const NetworkDiagram = ({ currentTheme, onCanvasActivityChange }) => {
         window.addEventListener('topologyLoaded', handleTopologyLoaded);
         return () => window.removeEventListener('topologyLoaded', handleTopologyLoaded);
     }, [loadTopology]);
+
+    // Handle topology reset event
+    useEffect(() => {
+        const handleTopologyReset = () => {
+            try {
+                Logger.debug('NetworkDiagram: Handling topology reset event');
+                
+                // Clear existing nodes and connections
+                if (jsPlumbInstance.current) {
+                    jsPlumbInstance.current.reset();
+                }
+                setNodes([]);
+                nodesRef.current = {};
+                setHasCanvasActivity(false);
+
+                Logger.info('NetworkDiagram: Successfully reset topology');
+            } catch (error) {
+                Logger.error('NetworkDiagram: Error handling topology reset event', {
+                    error: error.message,
+                    stack: error.stack
+                });
+                toast.error('Failed to reset topology');
+            }
+        };
+
+        // Subscribe to topology reset event
+        TopologyManager.on('topologyReset', handleTopologyReset);
+
+        return () => {
+            TopologyManager.off('topologyReset', handleTopologyReset);
+        };
+    }, []);
 
     return (
         <div className="network-diagram">

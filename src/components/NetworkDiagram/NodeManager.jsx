@@ -101,48 +101,81 @@ export const useNodeManager = ({ jsPlumbInstance, setNodes, nodesRef }) => {
      * @param {string} nodeId - ID of the node to delete
      */
     const deleteNode = useCallback((nodeId) => {
-        const nodeToDelete = nodesRef.current[nodeId]?.node;
-        
-        if (!nodeToDelete) {
-            Logger.warn('Attempted to delete non-existent node', { nodeId });
-            return;
-        }
-
-        // Remove all connections related to this node
-        const relatedConnections = Object.values(TopologyManager.topology.connections)
-            .filter(conn => 
-                conn.sourceNodeId === nodeId || 
-                conn.targetNodeId === nodeId
-            );
-
-        // Remove all related connections
-        relatedConnections.forEach(removeConnection);
-
-        // Remove node from jsPlumb
-        if (jsPlumbInstance.current) {
-            const nodeElement = document.getElementById(nodeId);
-            if (nodeElement) {
-                jsPlumbInstance.current.removeAllEndpoints(nodeElement);
+        try {
+            const nodeRef = nodesRef.current[nodeId];
+            const nodeToDelete = nodeRef?.node;
+            
+            if (!nodeToDelete) {
+                Logger.warn('Attempted to delete non-existent node', { 
+                    nodeId,
+                    availableNodes: Object.keys(nodesRef.current)
+                });
+                return;
             }
+
+            Logger.debug('NodeManager: Starting node deletion', {
+                nodeId,
+                nodeType: nodeToDelete.type,
+                nodeName: nodeToDelete.name
+            });
+
+            // Remove all connections related to this node
+            const relatedConnections = Object.values(TopologyManager.topology.connections)
+                .filter(conn => 
+                    conn.sourceNode.id === nodeId || 
+                    conn.targetNode.id === nodeId
+                );
+
+            Logger.debug('NodeManager: Removing related connections', {
+                nodeId,
+                connectionCount: relatedConnections.length,
+                connections: relatedConnections.map(c => c.id)
+            });
+
+            // Remove all related connections
+            relatedConnections.forEach(removeConnection);
+
+            // Remove node from jsPlumb
+            if (jsPlumbInstance.current) {
+                const nodeElement = document.getElementById(nodeId);
+                if (nodeElement) {
+                    jsPlumbInstance.current.removeAllEndpoints(nodeElement);
+                    Logger.debug('NodeManager: Removed jsPlumb endpoints', { nodeId });
+                } else {
+                    Logger.warn('NodeManager: Node element not found in DOM', { nodeId });
+                }
+            }
+
+            // Remove node from TopologyManager
+            const removedNode = TopologyManager.removeTopologyNode(nodeId);
+            if (!removedNode) {
+                Logger.warn('NodeManager: Node not found in TopologyManager', { nodeId });
+            }
+
+            // Remove node from local state
+            setNodes(prevNodes => prevNodes.filter(node => node.id !== nodeId));
+
+            // Remove node reference
+            delete nodesRef.current[nodeId];
+
+            // Log successful deletion
+            Logger.info('NodeManager: Node deleted successfully', {
+                nodeId,
+                nodeType: nodeToDelete.type,
+                nodeName: nodeToDelete.name,
+                relatedConnectionsCount: relatedConnections.length
+            });
+
+            toast.info(`Node ${nodeToDelete.name} deleted`);
+
+        } catch (error) {
+            Logger.error('NodeManager: Failed to delete node', {
+                nodeId,
+                error: error.message,
+                stack: error.stack
+            });
+            toast.error('Failed to delete node');
         }
-
-        // Remove node from TopologyManager
-        TopologyManager.removeTopologyNode(nodeId);
-
-        // Remove node from local state
-        setNodes(prevNodes => prevNodes.filter(node => node.id !== nodeId));
-
-        // Remove node reference
-        delete nodesRef.current[nodeId];
-
-        // Log deletion
-        Logger.info('Node Deleted', {
-            nodeId,
-            nodeType: nodeToDelete.type,
-            relatedConnectionsCount: relatedConnections.length
-        });
-
-        toast.info(`Node ${nodeToDelete.name} deleted`);
     }, [jsPlumbInstance, nodesRef, removeConnection, setNodes]);
 
     return {

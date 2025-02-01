@@ -116,13 +116,34 @@ const Toolbar = ({
         return new Date(dateStr).toLocaleString();
     };
 
+    /**
+     * Handle resetting the topology
+     */
+    const handleResetClick = () => {
+        try {
+            Logger.debug('Toolbar: Resetting topology');
+            TopologyManager.resetTopology();
+            toast.success('Canvas reset successfully');
+        } catch (error) {
+            Logger.error('Toolbar: Failed to reset topology', {
+                error: error.message,
+                stack: error.stack
+            });
+            toast.error('Failed to reset canvas');
+        }
+    };
+
     return (
         <>
             <AppBar 
                 position="static" 
                 color="default" 
                 elevation={1}
-                sx={{ borderBottom: '1px solid rgba(0,0,0,0.12)' }}
+                sx={{ 
+                    backgroundColor: 'background.paper',
+                    borderBottom: '1px solid',
+                    borderColor: 'divider'
+                }}
             >
                 <MuiToolbar variant="dense">
                     <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -137,6 +158,13 @@ const Toolbar = ({
                             <span>
                                 <IconButton onClick={() => setIsLoadDialogOpen(true)}>
                                     <CloudDownloadIcon />
+                                </IconButton>
+                            </span>
+                        </Tooltip>
+                        <Tooltip title="Reset Diagram">
+                            <span>
+                                <IconButton onClick={handleResetClick}>
+                                    <Typography variant="body1">Reset</Typography>
                                 </IconButton>
                             </span>
                         </Tooltip>
